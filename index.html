@@ -38,7 +38,6 @@
             margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid var(--border);
             padding-bottom: 10px; color: var(--text); text-transform: uppercase;
         }
-        /* Adjusted for Bottom-to-Top Scroll */
         .content-area { 
             flex-grow: 1; 
             overflow-y: auto; 
@@ -47,8 +46,15 @@
             flex-direction: column; 
         }
         .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
-        .user-name { color: var(--accent); font-weight: bold; }
+        .user-name { font-weight: bold; }
         .twitch-emote { vertical-align: middle; height: 30px; }
+        .badge-icon { 
+            height: 18px; 
+            width: 18px; 
+            vertical-align: middle; 
+            margin-right: 4px; 
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body id="body-tag">
@@ -110,7 +116,29 @@
             return html;
         }
 
-        // Auto-scroll helper
+        // Helper to turn badge names into HTML images
+        function formatBadges(badges) {
+            if (!badges || badges.length === 0) return "";
+            let badgeHtml = "";
+            
+            // Map common badges to their static Twitch URLs
+            const badgeMap = {
+                'broadcaster': 'https://static-cdn.jtvnw.net/badges/v1/5527c47c-427b-4863-bb3a-9f271f38113c/1',
+                'moderator': 'https://static-cdn.jtvnw.net/badges/v1/326785d4-dcaf-4483-977c-590b0712750e/1',
+                'vip': 'https://static-cdn.jtvnw.net/badges/v1/b817aba4-fad8-49e2-b88a-7cc744dfa6ec/1',
+                'partner': 'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b7897a7403a3/1',
+                'subscriber': 'https://static-cdn.jtvnw.net/badges/v1/5d9fc2c4-b030-4e9b-81f1-08107954930e/1' // Default sub star
+            };
+
+            badges.forEach(b => {
+                const url = badgeMap[b.name.toLowerCase()];
+                if (url) {
+                    badgeHtml += `<img class="badge-icon" src="${url}" alt="${b.name}">`;
+                }
+            });
+            return badgeHtml;
+        }
+
         function scrollToBottom(element) {
             element.scrollTop = element.scrollHeight;
         }
@@ -120,21 +148,21 @@
             const msgObj = data.data.message || {};
             const raw = (msgObj.message || msgObj.text || data.data.rawInput || "").trim();
             const user = msgObj.displayName || msgObj.username || "Unknown";
+            const userColor = msgObj.color || "var(--accent)";
             const isMod = msgObj.isModerator || msgObj.isBroadcaster || false;
             
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // --- COMMAND: !qclear (Universal Fix) ---
+            // --- COMMAND: !qclear ---
             if (raw.toLowerCase().includes('!qclear')) {
                 if (queueArea) {
                     queueArea.innerHTML = '';
-                    console.log("Queue cleared.");
                 }
                 return; 
             }
 
-            // --- ADMIN COMMANDS (!settheme, !reorder, !setcommand) ---
+            // --- ADMIN COMMANDS ---
             if (isMod) {
                 if (raw.toLowerCase().startsWith('!settheme ')) {
                     const theme = raw.split(' ')[1];
@@ -161,19 +189,21 @@
                 }
             }
 
-            // --- RENDER TO LIVE CHAT (Bottom Up) ---
+            // --- RENDER PREP ---
             const emotes = msgObj.emotes || [];
             const msgHtml = formatEmotes(raw, emotes);
+            const badgeHtml = formatBadges(msgObj.badges || []);
 
+            // --- RENDER TO LIVE CHAT ---
             if (chatArea) {
                 const chatDiv = document.createElement('div');
                 chatDiv.className = 'chat-msg';
-                chatDiv.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml}`;
-                chatArea.appendChild(chatDiv); // Using appendChild for bottom-up
+                chatDiv.innerHTML = `${badgeHtml}<span class="user-name" style="color: ${userColor}">${user}:</span> ${msgHtml}`;
+                chatArea.appendChild(chatDiv);
                 scrollToBottom(chatArea);
             }
 
-            // --- RENDER TO FILTERED QUEUE (Bottom Up) ---
+            // --- RENDER TO FILTERED QUEUE ---
             const trigger = settings.queueCmd.toLowerCase();
             if (raw.toLowerCase().startsWith(trigger + ' ') && queueArea) {
                 const cleanHtml = msgHtml.substring(trigger.length).trim();
@@ -181,8 +211,8 @@
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "12px";
-                qDiv.innerHTML = `<span class="user-name">${user}:</span> ${cleanHtml}`;
-                queueArea.appendChild(qDiv); // Using appendChild for bottom-up
+                qDiv.innerHTML = `${badgeHtml}<span class="user-name" style="color: ${userColor}">${user}:</span> ${cleanHtml}`;
+                queueArea.appendChild(qDiv);
                 scrollToBottom(queueArea);
             }
         });

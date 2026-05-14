@@ -67,6 +67,7 @@
     
     <script>
         // --- 1. LOAD SAVED SETTINGS ---
+        // This is handled automatically by the browser to preserve user-specific layouts
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
@@ -76,7 +77,8 @@
         function applySettings() {
             if (settings.theme === 'light') document.body.classList.add('light-theme');
             settings.order.forEach((pos, index) => {
-                document.getElementById(`pane-${index + 1}`).style.gridColumn = pos;
+                const pane = document.getElementById(`pane-${index + 1}`);
+                if (pane) pane.style.gridColumn = pos;
             });
         }
         applySettings();
@@ -85,8 +87,9 @@
         const client = new StreamerbotClient({
             host: '127.0.0.1', port: 8080,
             onConnect: () => {
-                document.getElementById('status-indicator').innerText = 'Connected';
-                document.getElementById('status-indicator').style.color = '#00ff00';
+                const indicator = document.getElementById('status-indicator');
+                indicator.innerText = 'Connected';
+                indicator.style.color = '#00ff00';
             }
         });
 
@@ -102,16 +105,20 @@
             return html;
         }
 
-        // --- 4. MESSAGE & COMMAND LOGIC ---
+        // --- 4. CORE MESSAGE & COMMAND LOGIC ---
         client.on('Twitch.ChatMessage', (data) => {
             const user = data.data.message.displayName;
-            const raw = data.data.message.message;
+            const raw = data.data.message.message.trim();
             const isMod = data.data.message.isModerator || data.data.message.isBroadcaster;
-            const msgHtml = formatEmotes(raw, data.data.message.emotes);
+            const emotes = data.data.message.emotes;
+            const msgHtml = formatEmotes(raw, emotes);
             
-            // COMMAND: !qclear
+            const chatArea = document.getElementById('area-1');
+            const queueArea = document.getElementById('area-3');
+
+            // COMMAND: !qclear (Broadcaster & Mod Only)
             if (raw.toLowerCase() === '!qclear' && isMod) {
-                document.getElementById('area-3').innerHTML = '';
+                if (queueArea) queueArea.innerHTML = '';
                 return;
             }
 
@@ -121,48 +128,64 @@
                 if (theme === 'light') { document.body.classList.add('light-theme'); settings.theme = 'light'; }
                 else { document.body.classList.remove('light-theme'); settings.theme = 'dark'; }
                 localStorage.setItem('theme', settings.theme);
+                return;
             }
 
-            // COMMAND: !reorder 1 2 3
+            // COMMAND: !reorder [p1] [p2] [p3]
             if (raw.toLowerCase().startsWith('!reorder ') && isMod) {
                 const parts = raw.split(' ');
-                const newOrder = [parts[1], parts[2], parts[3]];
-                newOrder.forEach((pos, i) => {
-                    document.getElementById(`pane-${i+1}`).style.gridColumn = pos;
-                });
-                localStorage.setItem('paneOrder', JSON.stringify(newOrder));
+                if (parts.length === 4) {
+                    const newOrder = [parts[1], parts[2], parts[3]];
+                    newOrder.forEach((pos, i) => {
+                        const pane = document.getElementById(`pane-${i+1}`);
+                        if (pane) pane.style.gridColumn = pos;
+                    });
+                    localStorage.setItem('paneOrder', JSON.stringify(newOrder));
+                }
+                return;
             }
 
-            // COMMAND: !setcommand !newcmd
+            // COMMAND: !setcommand [new_trigger]
             if (raw.toLowerCase().startsWith('!setcommand ') && isMod) {
                 settings.queueCmd = raw.split(' ')[1];
                 localStorage.setItem('queueCmd', settings.queueCmd);
+                return;
             }
 
             // RENDER TO LIVE CHAT
-            const chatDiv = document.createElement('div');
-            chatDiv.className = 'chat-msg';
-            chatDiv.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml}`;
-            document.getElementById('area-1').prepend(chatDiv);
+            if (chatArea) {
+                const chatDiv = document.createElement('div');
+                chatDiv.className = 'chat-msg';
+                chatDiv.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml}`;
+                chatArea.prepend(chatDiv);
+            }
 
             // RENDER TO FILTERED QUEUE
-            if (raw.toLowerCase().startsWith(settings.queueCmd + ' ')) {
+            // Logic specifically targeting your !c (or custom) command
+            if (raw.toLowerCase().startsWith(settings.queueCmd + ' ') && queueArea) {
+                const cleanHtml = msgHtml.replace(new RegExp('^' + settings.queueCmd + '\\s+', 'i'), '');
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "12px";
-                qDiv.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml.replace(settings.queueCmd + ' ', '')}`;
-                document.getElementById('area-3').prepend(qDiv);
+                qDiv.innerHTML = `<span class="user-name">${user}:</span> ${cleanHtml}`;
+                queueArea.prepend(qDiv);
             }
         });
 
-        // EVENTS LIST
-        client.on('Twitch.Follow', (d) => {
-            const div = document.createElement('div');
-            div.className = 'chat-msg';
-            div.innerHTML = `<span style="color:var(--highlight)">✨ ${d.data.user_name} followed!</span>`;
-            document.getElementById('area-2').prepend(div);
-        });
+        // --- 5. ACTIVITY EVENTS ---
+        const activityArea = document.getElementById('area-2');
+        const logEvent = (html) => {
+            if (activityArea) {
+                const div = document.createElement('div');
+                div.className = 'chat-msg';
+                div.innerHTML = html;
+                activityArea.prepend(div);
+            }
+        };
+
+        client.on('Twitch.Follow', (d) => logEvent(`<span class="event-text">✨ ${d.data.user_name} followed!</span>`));
+        client.on('Twitch.Subscription', (d) => logEvent(`<span class="event-text">💜 ${d.data.user_name} subbed!</span>`));
     </script>
 </body>
 </html>

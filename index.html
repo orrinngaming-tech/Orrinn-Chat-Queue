@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Streamer Dashboard</title>
+    <title>Streamer Dashboard - Master Stable</title>
     <style id="theme-style">
         :root {
             --bg: #121212; --panel: #1e1e1e; --text: #e0e0e0; --border: #333;
@@ -37,7 +37,7 @@
             padding: 15px; flex: 1; min-width: 0; overflow: hidden;
         }
 
-        /* FLEX RATIOS: FIXED PER image_ca09e6.png */
+        /* FLEX RATIOS: Chat(1.2) | Activity(0.8) | Queue(1.2) */
         .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
         .container:not(.horizontal-layout) #pane-2 { flex: 0.8; }
         .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
@@ -92,6 +92,8 @@
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
 
+        let currentOrder = 0;
+
         const client = new StreamerbotClient({
             onConnect: () => {
                 document.getElementById('status-indicator').innerText = 'Connected';
@@ -121,7 +123,7 @@
             const rawText = msgObj.message.toString();
             const lowerText = rawText.toLowerCase().trim();
             
-            // ROBUST PERMISSION CHECK
+            // ROBUST PERMISSIONS (Identifies Broadcaster/Mod Status)
             const isBroadcaster = msgObj.isBroadcaster || msgObj.role === 4 || msgObj.username?.toLowerCase() === 'orrinn';
             const isMod = msgObj.isModerator || msgObj.role >= 3 || isBroadcaster;
             
@@ -131,39 +133,46 @@
             if (isMod) {
                 if (lowerText.startsWith("!qclear")) {
                     area3.innerHTML = "";
-                    // We let this proceed so the command shows in chat for confirmation
                 } else if (lowerText.startsWith("!time")) {
                     const isHidden = body.classList.toggle('hide-chat-time');
                     localStorage.setItem('showTime', !isHidden);
-                    return; // Stop processing so !time doesn't clutter chat area
-                } else if (lowerText.startsWith("!reorder") || lowerText.startsWith("!layout")) {
+                    return; 
+                } else if (lowerText.startsWith("!layout")) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
+                    return;
+                } else if (lowerText.startsWith("!reorder")) {
+                    const panes = [document.getElementById('pane-1'), document.getElementById('pane-2'), document.getElementById('pane-3')];
+                    currentOrder = (currentOrder + 1) % 3;
+                    if (currentOrder === 0) {
+                        panes[0].style.order = "1"; panes[1].style.order = "2"; panes[2].style.order = "3";
+                    } else if (currentOrder === 1) {
+                        panes[1].style.order = "1"; panes[0].style.order = "2"; panes[2].style.order = "3";
+                    } else {
+                        panes[0].style.order = "1"; panes[2].style.order = "2"; panes[1].style.order = "3";
+                    }
                     return;
                 }
             }
 
-            // --- RENDERING ---
+            // --- UI RENDERING ---
             const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const userColor = msgObj.color || '#bb86fc';
             const baseContent = `<span class="timestamp">${timeStr}</span>${badgeHtml}<span class="user-name" style="color:${userColor}">${msgObj.displayName}:</span> `;
 
-            // Live Chat Area
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
             chatDiv.innerHTML = baseContent + emoteHtml;
             area1.appendChild(chatDiv);
             area1.scrollTop = area1.scrollHeight;
 
-            // Filtered Queue Area
             const trigger = settings.queueCmd.toLowerCase();
             if (lowerText.startsWith(trigger + ' ')) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                // Get message text after the command
                 const displayMsg = emoteHtml.substring(rawText.indexOf(' ') + 1).trim();
                 qDiv.innerHTML = baseContent + displayMsg;
                 area3.appendChild(qDiv);
@@ -171,6 +180,7 @@
             }
         });
 
+        // Activity Feed Logic
         const logEvent = (main, sub = "") => {
             const div = document.createElement('div');
             div.className = 'chat-msg';

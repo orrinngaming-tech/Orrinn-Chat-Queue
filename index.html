@@ -26,7 +26,7 @@
             background-color: #1e1e1e;
             color: #ff4444; 
             border: 1px solid #333;
-            font-size: 1.1rem; /* Slightly larger status */
+            font-size: 1.05rem;
         }
 
         .container {
@@ -49,7 +49,7 @@
 
         h2 {
             margin-top: 0;
-            font-size: 1.3rem; /* Increased Heading Size */
+            font-size: 1.25rem; /* Slightly reduced header */
             border-bottom: 1px solid #333;
             padding-bottom: 10px;
             color: #ffffff;
@@ -59,7 +59,7 @@
         .content-area {
             flex-grow: 1;
             overflow-y: auto;
-            font-size: 1.1rem; /* Increased Body Text Size */
+            font-size: 1.05rem; /* The "Goldilocks" font size */
         }
 
         .chat-msg {
@@ -67,12 +67,17 @@
             border-bottom: 1px solid #2a2a2a;
             padding-bottom: 6px;
             line-height: 1.5;
+            animation: fadeIn 0.3s ease;
         }
 
-        /* Emote Styling */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .twitch-emote {
             vertical-align: middle;
-            height: 28px; /* Scales with larger text */
+            height: 30px; /* Scaled to match 1.05rem text */
             margin: -2px 1px;
         }
 
@@ -127,21 +132,16 @@
             onDisconnect: setDisconnected
         });
 
-        // Helper to replace text with Emote Images
         function formatEmotes(message, emotes) {
             if (!emotes || emotes.length === 0) return message;
-            
-            // Sort emotes backwards to prevent index shifting while replacing
             const sortedEmotes = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
             let formattedMessage = message;
-
             sortedEmotes.forEach(emote => {
                 const imgTag = `<img class="twitch-emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${emote.id}/default/dark/1.0" alt="${emote.name}">`;
                 const before = formattedMessage.slice(0, emote.startIndex);
                 const after = formattedMessage.slice(emote.endIndex + 1);
                 formattedMessage = before + imgTag + after;
             });
-
             return formattedMessage;
         }
 
@@ -158,8 +158,6 @@
             const user = data.data.message.displayName;
             const rawMsg = data.data.message.message;
             const emotes = data.data.message.emotes;
-            
-            // Apply Emote Formatting
             const msgHtml = formatEmotes(rawMsg, emotes);
             
             const chatArea = document.getElementById('live-chat');
@@ -172,29 +170,23 @@
                 chatArea.prepend(div);
             }
 
-            if (rawMsg.toLowerCase().startsWith('!c ') && queueArea) {
-                // Strip the !c and re-format just in case there are emotes in the remainder
-                const cleanRaw = rawMsg.substring(3).trim();
-                // Note: Emote indices change when we strip "!c ", so we just re-run the formatter
-                // or display the already formatted version minus the command
-                const cleanHtml = msgHtml.replace(/^!c\s+/i, ''); 
-                
+            const commandRegex = /^!c\s+/i; 
+            if (commandRegex.test(rawMsg) && queueArea) {
+                const cleanHtml = msgHtml.replace(commandRegex, '');
                 const div = document.createElement('div');
                 div.className = 'chat-msg';
-                div.style.borderLeft = "3px solid #bb86fc";
-                div.style.paddingLeft = "10px";
+                div.style.borderLeft = "4px solid #bb86fc";
+                div.style.paddingLeft = "12px";
                 div.innerHTML = `<span class="user-name">${user}:</span> ${cleanHtml}`;
                 queueArea.prepend(div);
             }
         });
 
-        // Activity Feed Listeners
         client.on('Twitch.Follow', (data) => logActivity(`<span class="event-text">✨ ${data.data.user_name} followed!</span>`));
         client.on('Twitch.Subscription', (data) => logActivity(`<span class="event-text">💜 ${data.data.user_name} subbed!</span>`));
         client.on('Twitch.Cheer', (data) => logActivity(`<span class="bits-text">💎 ${data.data.user_name} cheered ${data.data.bits} bits!</span>`));
         client.on('Twitch.RewardRedemption', (data) => logActivity(`<span class="redeem-text">🎁 ${data.data.user_name} redeemed: ${data.data.reward.title}</span>`));
         client.on('Twitch.Raid', (data) => logActivity(`<span class="event-text">⚔️ RAID! ${data.data.from_broadcaster_user_name} brought ${data.data.viewers} viewers!</span>`));
-
     </script>
 </body>
 </html>

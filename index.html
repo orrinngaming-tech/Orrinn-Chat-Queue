@@ -26,10 +26,7 @@
             background-color: var(--panel); border: 1px solid var(--border);
         }
         .container {
-            display: flex;
-            gap: 15px;
-            flex-grow: 1;
-            overflow: hidden;
+            display: flex; gap: 15px; flex-grow: 1; overflow: hidden;
             flex-direction: row; 
         }
         .horizontal-layout { flex-direction: column; }
@@ -37,28 +34,24 @@
         .column {
             background-color: var(--panel); border: 1px solid var(--border);
             border-radius: 8px; display: flex; flex-direction: column;
-            padding: 15px; flex: 1; 
-            min-width: 0; 
-            overflow: hidden;
+            padding: 15px; flex: 1; min-width: 0; overflow: hidden;
         }
-        /* Vertical Mode Weights */
         .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
-        .container:not(.horizontal-layout) #pane-2 { flex: 0.6; }
+        .container:not(.horizontal-layout) #pane-2 { flex: 0.8; } /* Slightly wider for longer event text */
         .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
 
         h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; text-transform: uppercase; }
 
         .content-area { 
-            flex-grow: 1; 
-            overflow-y: auto; 
-            font-size: 1rem; 
-            word-break: break-word; 
-            overflow-x: hidden;     
+            flex-grow: 1; overflow-y: auto; font-size: 1rem; 
+            word-break: break-word; overflow-x: hidden;     
         }
         .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
         .user-name { font-weight: bold; }
         .twitch-emote { vertical-align: middle; height: 28px; margin: 0 2px; }
         .badge-icon { height: 18px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+        .event-text { color: #03dac6; font-size: 0.95rem; }
+        .event-subtext { color: #888; font-size: 0.85rem; font-style: italic; display: block; margin-top: 2px; }
     </style>
 </head>
 <body id="body-tag">
@@ -71,7 +64,7 @@
             <div id="area-1" class="content-area"></div>
         </div>
         <div class="column" id="pane-2">
-            <h2>Activity</h2>
+            <h2>Activity Feed</h2>
             <div id="area-2" class="content-area"></div>
         </div>
         <div class="column" id="pane-3">
@@ -112,7 +105,6 @@
             }
         });
 
-        // --- RESTORED EMOTE LOGIC ---
         function formatEmotes(message, emotes) {
             if (!emotes || emotes.length === 0) return message;
             const sorted = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
@@ -134,7 +126,6 @@
             const user = msgObj.displayName;
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
-            // Layout Toggle
             if (isMod && raw.toLowerCase() === '!layout') {
                 container.classList.toggle('horizontal-layout');
                 localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
@@ -146,19 +137,15 @@
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // Construct the message element
             const div = document.createElement('div');
             div.className = 'chat-msg';
             div.innerHTML = `${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${user}:</span> ${emoteHtml}`;
             
-            // Append to Chat
             chatArea.appendChild(div);
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // Append to Queue if triggered
             const trigger = settings.queueCmd.toLowerCase();
             if (raw.toLowerCase().startsWith(trigger + ' ')) {
-                // Strip the trigger word for the queue view
                 const queueContent = emoteHtml.substring(trigger.length).trim();
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
@@ -170,18 +157,49 @@
             }
         });
 
-        // Activity Logging
+        // --- ENHANCED ACTIVITY LOGGING ---
         const activityArea = document.getElementById('area-2');
-        const logEvent = (html) => {
+        const logEvent = (html, subtext = "") => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            div.innerHTML = html;
-            activityArea.appendChild(div);
-            activityArea.scrollTop = activityArea.scrollHeight;
+            let content = `<span class="event-text">${html}</span>`;
+            if (subtext) content += `<span class="event-subtext">${subtext}</span>`;
+            div.innerHTML = content;
+            activityArea.prepend(div); 
         };
 
-        client.on('Twitch.Follow', (d) => logEvent(`✨ <b>${d.data.user_name}</b> followed!`));
+        // Redemptions (Matches the orange circles in image_cafe7e.png)
+        client.on('Twitch.RewardRedemption', (d) => {
+            const user = d.data.user_name;
+            const reward = d.data.reward.title;
+            const input = d.data.user_input ? `"${d.data.user_input}"` : "";
+            logEvent(`🟡 <b>${reward}</b>`, `Redeemed by ${user} ${input}`);
+        });
+
+        // Follows
+        client.on('Twitch.Follow', (d) => logEvent(`💖 <b>${d.data.user_name}</b> followed!`));
+
+        // Shoutouts (Sent or Received)
+        client.on('Twitch.ShoutoutCreated', (d) => logEvent(`📢 <b>Shoutout!</b>`, `To ${d.data.to_broadcaster_user_name} (${d.data.viewer_count} viewers)`));
+
+        // Stream Streaks (Matches the fire icon in image_cafe7e.png)
+        // Note: This often comes through as a Chat Announcement or specific bot event
+        client.on('Twitch.Announcement', (d) => {
+            if (d.data.message.toLowerCase().includes('streak')) {
+                logEvent(`🔥 <b>Stream Streak!</b>`, d.data.message);
+            }
+        });
+
+        // Subscriptions
         client.on('Twitch.Subscription', (d) => logEvent(`💜 <b>${d.data.user_name}</b> subbed!`));
+        client.on('Twitch.GiftSubscription', (d) => logEvent(`🎁 <b>${d.data.user_name}</b> gifted a sub!`));
+        client.on('Twitch.GiftBomb', (d) => logEvent(`💣 <b>${d.data.user_name}</b> gifted ${d.data.gifts} subs!`));
+
+        // Interaction/Hype
+        client.on('Twitch.HypeTrainBegin', (d) => logEvent(`🚂 <b>Hype Train Started!</b>`, `Level ${d.data.level}`));
+        client.on('Twitch.Raid', (d) => logEvent(`⚔️ <b>${d.data.from_broadcaster_user_name}</b> raided!`, `With ${d.data.viewers} viewers`));
+        client.on('Twitch.Cheer', (d) => logEvent(`✨ <b>${d.data.user_name}</b> cheered ${d.data.bits} bits!`));
+
     </script>
 </body>
 </html>

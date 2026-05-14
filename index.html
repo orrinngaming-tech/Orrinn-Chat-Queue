@@ -120,21 +120,23 @@
 
             const rawText = msgObj.message.toString();
             const lowerText = rawText.toLowerCase().trim();
-            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
+            
+            // ROBUST PERMISSION CHECK
+            const isBroadcaster = msgObj.isBroadcaster || msgObj.role === 4 || msgObj.username?.toLowerCase() === 'orrinn';
+            const isMod = msgObj.isModerator || msgObj.role >= 3 || isBroadcaster;
+            
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // --- COMMANDS (FIXED FOR TRAILING SPACES PER image_ca09e6.png) ---
+            // --- COMMAND HANDLING ---
             if (isMod) {
                 if (lowerText.startsWith("!qclear")) {
                     area3.innerHTML = "";
-                    // Don't return, so it still logs in chat
-                }
-                if (lowerText.startsWith("!time")) {
+                    // We let this proceed so the command shows in chat for confirmation
+                } else if (lowerText.startsWith("!time")) {
                     const isHidden = body.classList.toggle('hide-chat-time');
                     localStorage.setItem('showTime', !isHidden);
-                    return;
-                }
-                if (lowerText.startsWith("!layout")) {
+                    return; // Stop processing so !time doesn't clutter chat area
+                } else if (lowerText.startsWith("!reorder") || lowerText.startsWith("!layout")) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
@@ -147,21 +149,23 @@
             const userColor = msgObj.color || '#bb86fc';
             const baseContent = `<span class="timestamp">${timeStr}</span>${badgeHtml}<span class="user-name" style="color:${userColor}">${msgObj.displayName}:</span> `;
 
-            // Live Chat
+            // Live Chat Area
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
             chatDiv.innerHTML = baseContent + emoteHtml;
             area1.appendChild(chatDiv);
             area1.scrollTop = area1.scrollHeight;
 
-            // Filtered Queue
+            // Filtered Queue Area
             const trigger = settings.queueCmd.toLowerCase();
-            if (lowerText.startsWith(trigger + ' ') && !lowerText.startsWith("!qclear")) {
+            if (lowerText.startsWith(trigger + ' ')) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                qDiv.innerHTML = baseContent + emoteHtml.substring(trigger.length).trim();
+                // Get message text after the command
+                const displayMsg = emoteHtml.substring(rawText.indexOf(' ') + 1).trim();
+                qDiv.innerHTML = baseContent + displayMsg;
                 area3.appendChild(qDiv);
                 area3.scrollTop = area3.scrollHeight;
             }

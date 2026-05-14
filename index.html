@@ -48,10 +48,10 @@
         }
         .chat-msg { margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
         
-        /* Timestamp styling - Stacked above name */
+        /* Timestamps - Stacked layout */
         .timestamp { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
         
-        /* Toggle Logic for Live Chat only */
+        /* Toggle for Live Chat Panel Only */
         .hide-chat-time #area-1 .timestamp { display: none !important; }
 
         .user-name { font-weight: bold; }
@@ -83,7 +83,6 @@
             showTime: localStorage.getItem('showTime') !== 'false'
         };
 
-        // Apply visual settings immediately
         if (settings.theme === 'light') body.classList.add('light-theme');
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
@@ -115,73 +114,60 @@
             const msgObj = data.data.message;
             if (!msgObj) return;
 
-            const rawText = (msgObj.message || "").toString();
-            const lowerText = rawText.toLowerCase().trim();
+            const rawText = msgObj.message;
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // --- COMMAND HANDLING (MOD ONLY) ---
+            // --- REINSTATED WORKING !QCLEAR LOGIC ---
+            if (isMod && rawText.trim().toLowerCase() === "!qclear") {
+                document.getElementById('area-3').innerHTML = "";
+            }
+
+            // --- ADDITIONAL MOD COMMANDS ---
             if (isMod) {
-                // Wipe Filtered Queue
-                if (lowerText.includes('!qclear')) {
-                    document.getElementById('area-3').innerHTML = '';
-                    console.log("Queue Cleared via Command");
-                }
-                // Toggle Timestamps in Live Chat
-                if (lowerText === '!time') {
+                if (rawText.trim().toLowerCase() === "!time") {
                     const hidden = body.classList.toggle('hide-chat-time');
                     localStorage.setItem('showTime', !hidden);
                     return;
                 }
-                // Toggle Layout
-                if (lowerText === '!layout') {
+                if (rawText.trim().toLowerCase() === "!layout") {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
                 }
             }
 
-            // --- UI RENDERING ---
+            // --- RENDERING ---
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
-            const emoteHtml = formatEmotes(rawText.trim(), msgObj.emotes || []);
+            const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
-            const nameColor = msgObj.color || "#bb86fc";
 
-            // Standard HTML Template (Timestamp on Top)
-            const fullMessageHTML = `
-                <span class="timestamp">${time}</span>
-                ${badgeHtml}<span class="user-name" style="color:${nameColor}">${msgObj.displayName}:</span> ${emoteHtml}
-            `;
+            const msgContent = `<span class="timestamp">${time}</span>${badgeHtml}<span class="user-name" style="color:${msgObj.color || '#bb86fc'}">${msgObj.displayName}:</span> ${emoteHtml}`;
 
-            // Add to Live Chat
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
-            chatDiv.innerHTML = fullMessageHTML;
+            chatDiv.innerHTML = msgContent;
             chatArea.appendChild(chatDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // Add to Filtered Queue (Trigger Check)
             const trigger = settings.queueCmd.toLowerCase();
-            if (lowerText.startsWith(trigger + ' ') && !lowerText.includes('!qclear')) {
+            if (rawText.toLowerCase().startsWith(trigger + ' ') && rawText.toLowerCase().trim() !== "!qclear") {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                // Strip the trigger word for the queue pane
-                const cleanQueueText = emoteHtml.substring(trigger.length).trim();
-                qDiv.innerHTML = `<span class="timestamp">${time}</span>${badgeHtml}<span class="user-name" style="color:${nameColor}">${msgObj.displayName}:</span> ${cleanQueueText}`;
+                qDiv.innerHTML = msgContent.replace(emoteHtml, emoteHtml.substring(trigger.length).trim());
                 queueArea.appendChild(qDiv);
                 queueArea.scrollTop = queueArea.scrollHeight;
             }
         });
 
-        // Simplified Activity Feed
-        const logEvent = (text) => {
-            const div = document.createElement('div');
-            div.className = 'chat-msg';
-            div.innerHTML = `<span class="event-text">${text}</span>`;
-            document.getElementById('area-2').prepend(div); 
+        const logEvent = (t) => {
+            const d = document.createElement('div');
+            d.className = 'chat-msg';
+            d.innerHTML = `<span class="event-text">${t}</span>`;
+            document.getElementById('area-2').prepend(d); 
         };
 
         client.on('Twitch.Follow', (d) => logEvent(`💖 ${d.data.user_name} followed!`));

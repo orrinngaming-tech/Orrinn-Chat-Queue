@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Streamer Dashboard</title>
     <style>
-        /* Base Styles */
         body {
             background-color: #121212;
             color: #e0e0e0;
@@ -18,7 +17,6 @@
             box-sizing: border-box;
         }
 
-        /* Status Indicator */
         #status-indicator {
             font-weight: bold;
             padding: 10px;
@@ -26,11 +24,11 @@
             border-radius: 4px;
             text-align: center;
             background-color: #1e1e1e;
-            color: #ff4444; /* Default to disconnected red */
+            color: #ff4444; 
             border: 1px solid #333;
+            transition: all 0.3s ease;
         }
 
-        /* Layout Grid */
         .container {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -66,21 +64,22 @@
             line-height: 1.4;
         }
 
-        /* Message Styling */
         .chat-msg {
             margin-bottom: 8px;
             border-bottom: 1px solid #2a2a2a;
             padding-bottom: 4px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .user-name {
             color: #bb86fc;
             font-weight: bold;
         }
-
-        /* Scrollbar Styling */
-        .content-area::-webkit-scrollbar { width: 6px; }
-        .content-area::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -102,32 +101,34 @@
         </div>
     </div>
 
-    <!-- Library Loading -->
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
-        // Initialize Client
-        const client = new StreamerbotClient({
-            host: '127.0.0.1',
-            port: 8080,
-            immediate: true
-        });
-
         const statusIndicator = document.getElementById('status-indicator');
 
-        // Connection Handlers (Lowercase for v1.x)
-        client.on('connected', () => {
-            console.log('Connected to Streamer.bot');
+        // Update UI to Connected
+        function setConnected() {
             statusIndicator.innerText = 'Connected';
             statusIndicator.style.color = '#00ff00';
             statusIndicator.style.borderColor = '#00ff00';
-        });
+            console.log('Handshake successful.');
+        }
 
-        client.on('disconnected', () => {
-            console.warn('Disconnected from Streamer.bot');
+        // Update UI to Disconnected
+        function setDisconnected() {
             statusIndicator.innerText = 'Connecting to Streamer.bot...';
             statusIndicator.style.color = '#ff4444';
             statusIndicator.style.borderColor = '#333';
+        }
+
+        // Initialize Client with callback functions to avoid "Invalid event" warnings
+        const client = new StreamerbotClient({
+            host: '127.0.0.1',
+            port: 8080,
+            immediate: true,
+            onConnect: setConnected,
+            onDisconnect: setDisconnected,
+            onError: (err) => console.error('Bot Error:', err)
         });
 
         // Chat Message Logic

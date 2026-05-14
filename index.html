@@ -37,10 +37,10 @@
             padding: 15px; flex: 1; min-width: 0; overflow: hidden;
         }
 
-        /* FLEX RATIOS: RESTORED */
-        .container:not(.horizontal-layout) #pane-1 { flex: 1.2; } /* Live Chat */
-        .container:not(.horizontal-layout) #pane-2 { flex: 0.8; } /* Activity */
-        .container:not(.horizontal-layout) #pane-3 { flex: 1.2; } /* Filtered Queue */
+        /* FLEX RATIOS: FIXED PER image_ca09e6.png */
+        .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
+        .container:not(.horizontal-layout) #pane-2 { flex: 0.8; }
+        .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
 
         h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; text-transform: uppercase; }
 
@@ -50,10 +50,9 @@
         }
         .chat-msg { margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
         
-        /* Timestamps */
         .timestamp { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
         
-        /* Toggle Visibility Logic */
+        /* Instant Toggle Logic */
         .hide-chat-time #area-1 .timestamp { display: none !important; }
 
         .user-name { font-weight: bold; }
@@ -89,7 +88,6 @@
             showTime: localStorage.getItem('showTime') !== 'false'
         };
 
-        // Apply settings immediately on boot
         if (settings.theme === 'light') body.classList.add('light-theme');
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
@@ -120,44 +118,45 @@
             const msgObj = data.data.message;
             if (!msgObj) return;
 
-            const rawText = msgObj.message;
+            const rawText = msgObj.message.toString();
+            const lowerText = rawText.toLowerCase().trim();
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // !qclear (Strict Match)
-            if (isMod && rawText.trim().toLowerCase() === "!qclear") {
-                area3.innerHTML = "";
-            }
-
-            // Commands
+            // --- COMMANDS (FIXED FOR TRAILING SPACES PER image_ca09e6.png) ---
             if (isMod) {
-                if (rawText.trim().toLowerCase() === "!time") {
+                if (lowerText.startsWith("!qclear")) {
+                    area3.innerHTML = "";
+                    // Don't return, so it still logs in chat
+                }
+                if (lowerText.startsWith("!time")) {
                     const isHidden = body.classList.toggle('hide-chat-time');
                     localStorage.setItem('showTime', !isHidden);
                     return;
                 }
-                if (rawText.trim().toLowerCase() === "!layout") {
+                if (lowerText.startsWith("!layout")) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
                 }
             }
 
+            // --- RENDERING ---
             const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const userColor = msgObj.color || '#bb86fc';
             const baseContent = `<span class="timestamp">${timeStr}</span>${badgeHtml}<span class="user-name" style="color:${userColor}">${msgObj.displayName}:</span> `;
 
-            // Live Chat Panel
+            // Live Chat
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
             chatDiv.innerHTML = baseContent + emoteHtml;
             area1.appendChild(chatDiv);
             area1.scrollTop = area1.scrollHeight;
 
-            // Filtered Queue Panel
+            // Filtered Queue
             const trigger = settings.queueCmd.toLowerCase();
-            if (rawText.toLowerCase().startsWith(trigger + ' ') && rawText.toLowerCase().trim() !== "!qclear") {
+            if (lowerText.startsWith(trigger + ' ') && !lowerText.startsWith("!qclear")) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
@@ -168,7 +167,6 @@
             }
         });
 
-        // Activity Feed Handlers
         const logEvent = (main, sub = "") => {
             const div = document.createElement('div');
             div.className = 'chat-msg';

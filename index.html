@@ -49,10 +49,7 @@
             word-break: break-word; overflow-x: hidden;     
         }
         .chat-msg { margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
-        
         .timestamp { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
-        
-        /* Instant Toggle Logic */
         .hide-chat-time #area-1 .timestamp { display: none !important; }
 
         .user-name { font-weight: bold; }
@@ -88,6 +85,7 @@
             showTime: localStorage.getItem('showTime') !== 'false'
         };
 
+        // Initialize state
         if (settings.theme === 'light') body.classList.add('light-theme');
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
@@ -123,7 +121,6 @@
             const rawText = msgObj.message.toString();
             const lowerText = rawText.toLowerCase().trim();
             
-            // ROBUST PERMISSIONS (Identifies Broadcaster/Mod Status)
             const isBroadcaster = msgObj.isBroadcaster || msgObj.role === 4 || msgObj.username?.toLowerCase() === 'orrinn';
             const isMod = msgObj.isModerator || msgObj.role >= 3 || isBroadcaster;
             
@@ -137,6 +134,15 @@
                     const isHidden = body.classList.toggle('hide-chat-time');
                     localStorage.setItem('showTime', !isHidden);
                     return; 
+                } else if (lowerText.startsWith("!settheme")) {
+                    if (lowerText.includes("light")) {
+                        body.classList.add('light-theme');
+                        localStorage.setItem('theme', 'light');
+                    } else if (lowerText.includes("dark")) {
+                        body.classList.remove('light-theme');
+                        localStorage.setItem('theme', 'dark');
+                    }
+                    return;
                 } else if (lowerText.startsWith("!layout")) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
@@ -155,7 +161,6 @@
                 }
             }
 
-            // --- UI RENDERING ---
             const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const userColor = msgObj.color || '#bb86fc';
@@ -180,7 +185,6 @@
             }
         });
 
-        // Activity Feed Logic
         const logEvent = (main, sub = "") => {
             const div = document.createElement('div');
             div.className = 'chat-msg';

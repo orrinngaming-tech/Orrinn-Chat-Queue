@@ -66,7 +66,7 @@
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
-        // --- 1. LOAD SAVED SETTINGS ---
+        // --- 1. SETTINGS & INITIALIZATION ---
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
@@ -82,7 +82,6 @@
         }
         applySettings();
 
-        // --- 2. INITIALIZE CLIENT ---
         const client = new StreamerbotClient({
             host: '127.0.0.1', port: 8080,
             onConnect: () => {
@@ -92,7 +91,7 @@
             }
         });
 
-        // --- 3. EMOTE FORMATTER ---
+        // --- 2. HELPERS ---
         function formatEmotes(message, emotes) {
             if (!emotes || emotes.length === 0) return message;
             const sorted = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
@@ -104,57 +103,60 @@
             return html;
         }
 
-        // --- 4. CORE MESSAGE & COMMAND LOGIC ---
+        // --- 3. CORE MESSAGE HANDLING ---
         client.on('Twitch.ChatMessage', (data) => {
-            const msgObj = data.data.message;
-            const raw = (msgObj.message || msgObj.text || "").trim();
-            const user = msgObj.displayName || msgObj.username;
-            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
-            const emotes = msgObj.emotes || [];
+            // Data Extraction - looking for text and perms in all common locations
+            const msgObj = data.data.message || {};
+            const raw = (msgObj.message || msgObj.text || data.data.rawInput || "").trim();
+            const user = msgObj.displayName || msgObj.username || "Unknown";
             
+            const isBroadcaster = msgObj.isBroadcaster || data.data.isBroadcaster || false;
+            const isMod = msgObj.isModerator || data.data.isModerator || false;
+            const canAdmin = isBroadcaster || isMod;
+
+            const emotes = msgObj.emotes || [];
             const msgHtml = formatEmotes(raw, emotes);
+            
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // COMMAND: !qclear (Broadcaster & Mod Only)
+            // --- COMMAND: !qclear ---
             if (raw.toLowerCase() === '!qclear') {
-                if (isMod && queueArea) {
+                if (canAdmin && queueArea) {
                     queueArea.innerHTML = '';
+                    console.log("Queue cleared by " + user);
                 }
-                return; // Exit here so it doesn't appear in Live Chat
+                return; // STOP HERE: Don't show !qclear in Live Chat
             }
 
-            // COMMAND: !settheme [light/dark]
-            if (raw.toLowerCase().startsWith('!settheme ') && isMod) {
-                const theme = raw.split(' ')[1];
-                if (theme === 'light') { document.body.classList.add('light-theme'); settings.theme = 'light'; }
-                else { document.body.classList.remove('light-theme'); settings.theme = 'dark'; }
-                localStorage.setItem('theme', settings.theme);
-                return;
-            }
-
-            // COMMAND: !reorder [p1] [p2] [p3]
-            if (raw.toLowerCase().startsWith('!reorder ') && isMod) {
-                const parts = raw.split(' ');
-                if (parts.length === 4) {
-                    const newOrder = [parts[1], parts[2], parts[3]];
-                    newOrder.forEach((pos, i) => {
-                        const pane = document.getElementById(`pane-${i+1}`);
-                        if (pane) pane.style.gridColumn = pos;
-                    });
-                    localStorage.setItem('paneOrder', JSON.stringify(newOrder));
+            // --- ADMIN COMMANDS ---
+            if (canAdmin) {
+                if (raw.toLowerCase().startsWith('!settheme ')) {
+                    const theme = raw.split(' ')[1];
+                    theme === 'light' ? document.body.classList.add('light-theme') : document.body.classList.remove('light-theme');
+                    localStorage.setItem('theme', theme);
+                    return;
                 }
-                return;
+                if (raw.toLowerCase().startsWith('!reorder ')) {
+                    const parts = raw.split(' ');
+                    if (parts.length === 4) {
+                        const newOrder = [parts[1], parts[2], parts[3]];
+                        newOrder.forEach((pos, i) => {
+                            const pane = document.getElementById(`pane-${i+1}`);
+                            if (pane) pane.style.gridColumn = pos;
+                        });
+                        localStorage.setItem('paneOrder', JSON.stringify(newOrder));
+                    }
+                    return;
+                }
+                if (raw.toLowerCase().startsWith('!setcommand ')) {
+                    settings.queueCmd = raw.split(' ')[1];
+                    localStorage.setItem('queueCmd', settings.queueCmd);
+                    return;
+                }
             }
 
-            // COMMAND: !setcommand [new_trigger]
-            if (raw.toLowerCase().startsWith('!setcommand ') && isMod) {
-                settings.queueCmd = raw.split(' ')[1];
-                localStorage.setItem('queueCmd', settings.queueCmd);
-                return;
-            }
-
-            // RENDER TO LIVE CHAT
+            // --- RENDER TO LIVE CHAT ---
             if (chatArea) {
                 const chatDiv = document.createElement('div');
                 chatDiv.className = 'chat-msg';
@@ -162,9 +164,10 @@
                 chatArea.prepend(chatDiv);
             }
 
-            // RENDER TO FILTERED QUEUE
-            if (raw.toLowerCase().startsWith(settings.queueCmd.toLowerCase() + ' ') && queueArea) {
-                const cleanHtml = msgHtml.slice(settings.queueCmd.length).trim();
+            // --- RENDER TO FILTERED QUEUE ---
+            const trigger = settings.queueCmd.toLowerCase();
+            if (raw.toLowerCase().startsWith(trigger + ' ') && queueArea) {
+                const cleanHtml = msgHtml.substring(trigger.length).trim();
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
@@ -174,7 +177,7 @@
             }
         });
 
-        // --- 5. ACTIVITY EVENTS ---
+        // --- 4. ACTIVITY LOGGING ---
         const activityArea = document.getElementById('area-2');
         const logEvent = (html) => {
             if (activityArea) {

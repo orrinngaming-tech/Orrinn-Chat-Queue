@@ -18,58 +18,52 @@
             font-family: 'Segoe UI', Tahoma, sans-serif;
             margin: 0; padding: 15px; display: flex; flex-direction: column;
             height: 100vh; box-sizing: border-box; transition: background 0.3s;
-            overflow: hidden; /* Keeps the main window locked */
+            overflow: hidden;
         }
         #status-indicator {
             font-weight: bold; padding: 10px; margin-bottom: 15px;
             border-radius: 4px; text-align: center;
             background-color: var(--panel); border: 1px solid var(--border);
         }
-        /* THE FLEX CONTAINER */
         .container {
             display: flex;
             gap: 15px;
             flex-grow: 1;
             overflow: hidden;
-            flex-direction: row; /* Default Vertical Columns */
+            flex-direction: row; 
         }
-        .horizontal-layout {
-            flex-direction: column; /* Flips to Horizontal Rows */
-        }
+        .horizontal-layout { flex-direction: column; }
+        
         .column {
             background-color: var(--panel); border: 1px solid var(--border);
             border-radius: 8px; display: flex; flex-direction: column;
             padding: 15px; flex: 1; 
-            min-width: 0; /* CRITICAL: Allows flex items to shrink below content width */
+            min-width: 0; 
             overflow: hidden;
         }
-        /* Adjusted weights for vertical mode */
+        /* Vertical Mode Weights */
         .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
         .container:not(.horizontal-layout) #pane-2 { flex: 0.6; }
         .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
 
-        h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; text-transform: uppercase; }
 
         .content-area { 
             flex-grow: 1; 
             overflow-y: auto; 
             font-size: 1rem; 
-            word-break: break-word; /* Forces long words to wrap */
-            overflow-x: hidden;     /* Guarantees no horizontal scroll */
+            word-break: break-word; 
+            overflow-x: hidden;     
         }
-        .chat-msg { 
-            margin-bottom: 8px; 
-            padding-bottom: 4px; 
-            width: 100%; 
-            display: block; /* Ensures message stays in its container */
-        }
+        .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
         .user-name { font-weight: bold; }
-        .badge-icon { height: 18px; vertical-align: middle; margin-right: 4px; }
+        .twitch-emote { vertical-align: middle; height: 28px; margin: 0 2px; }
+        .badge-icon { height: 18px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
     </style>
 </head>
 <body id="body-tag">
 
-    <div id="status-indicator">Connecting...</div>
+    <div id="status-indicator">Connecting to Streamer.bot...</div>
 
     <div class="container" id="main-container">
         <div class="column" id="pane-1">
@@ -102,6 +96,7 @@
                 document.getElementById('pane-1').style.display = 'none';
                 document.getElementById('pane-2').style.display = 'none';
                 document.getElementById('status-indicator').style.display = 'none';
+                document.body.style.padding = '5px';
             } else {
                 if (settings.theme === 'light') document.body.classList.add('light-theme');
                 if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
@@ -117,6 +112,18 @@
             }
         });
 
+        // --- RESTORED EMOTE LOGIC ---
+        function formatEmotes(message, emotes) {
+            if (!emotes || emotes.length === 0) return message;
+            const sorted = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
+            let html = message;
+            sorted.forEach(e => {
+                const img = `<img class="twitch-emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${e.id}/default/dark/1.0">`;
+                html = html.slice(0, e.startIndex) + img + html.slice(e.endIndex + 1);
+            });
+            return html;
+        }
+
         function formatBadges(badges) {
             return (badges || []).map(b => `<img class="badge-icon" src="${b.imageUrl || b.url}" alt="${b.name}">`).join('');
         }
@@ -127,34 +134,54 @@
             const user = msgObj.displayName;
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
-            // Layout Toggle Command
+            // Layout Toggle
             if (isMod && raw.toLowerCase() === '!layout') {
                 container.classList.toggle('horizontal-layout');
-                const current = container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical';
-                localStorage.setItem('layout', current);
+                localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                 return;
             }
 
+            const emoteHtml = formatEmotes(raw, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // Render to Chat
+            // Construct the message element
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            div.innerHTML = `${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${user}:</span> ${raw}`;
+            div.innerHTML = `${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${user}:</span> ${emoteHtml}`;
+            
+            // Append to Chat
             chatArea.appendChild(div);
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // Render to Queue
-            if (raw.toLowerCase().startsWith(settings.queueCmd + ' ')) {
-                const qDiv = div.cloneNode(true);
+            // Append to Queue if triggered
+            const trigger = settings.queueCmd.toLowerCase();
+            if (raw.toLowerCase().startsWith(trigger + ' ')) {
+                // Strip the trigger word for the queue view
+                const queueContent = emoteHtml.substring(trigger.length).trim();
+                const qDiv = document.createElement('div');
+                qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
-                qDiv.style.paddingLeft = "8px";
+                qDiv.style.paddingLeft = "10px";
+                qDiv.innerHTML = `${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${user}:</span> ${queueContent}`;
                 queueArea.appendChild(qDiv);
                 queueArea.scrollTop = queueArea.scrollHeight;
             }
         });
+
+        // Activity Logging
+        const activityArea = document.getElementById('area-2');
+        const logEvent = (html) => {
+            const div = document.createElement('div');
+            div.className = 'chat-msg';
+            div.innerHTML = html;
+            activityArea.appendChild(div);
+            activityArea.scrollTop = activityArea.scrollHeight;
+        };
+
+        client.on('Twitch.Follow', (d) => logEvent(`✨ <b>${d.data.user_name}</b> followed!`));
+        client.on('Twitch.Subscription', (d) => logEvent(`💜 <b>${d.data.user_name}</b> subbed!`));
     </script>
 </body>
 </html>

@@ -7,71 +7,81 @@
     <style id="theme-style">
         :root {
             --bg: #121212; --panel: #1e1e1e; --text: #e0e0e0; --border: #333;
-            --accent: #bb86fc; --highlight: #03dac6;
+            --accent: #bb86fc;
         }
         .light-theme {
             --bg: #f5f5f5; --panel: #ffffff; --text: #202020; --border: #ccc;
-            --accent: #6200ee; --highlight: #018786;
+            --accent: #6200ee;
         }
         body {
             background-color: var(--bg); color: var(--text);
             font-family: 'Segoe UI', Tahoma, sans-serif;
-            margin: 0; padding: 20px; display: flex; flex-direction: column;
+            margin: 0; padding: 15px; display: flex; flex-direction: column;
             height: 100vh; box-sizing: border-box; transition: background 0.3s;
+            overflow: hidden; /* Keeps the main window locked */
         }
         #status-indicator {
-            font-weight: bold; padding: 12px; margin-bottom: 20px;
+            font-weight: bold; padding: 10px; margin-bottom: 15px;
             border-radius: 4px; text-align: center;
-            background-color: var(--panel); color: #ff4444; 
-            border: 1px solid var(--border); font-size: 1.05rem;
+            background-color: var(--panel); border: 1px solid var(--border);
         }
+        /* THE FLEX CONTAINER */
         .container {
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 20px; flex-grow: 1; overflow: hidden;
+            display: flex;
+            gap: 15px;
+            flex-grow: 1;
+            overflow: hidden;
+            flex-direction: row; /* Default Vertical Columns */
+        }
+        .horizontal-layout {
+            flex-direction: column; /* Flips to Horizontal Rows */
         }
         .column {
             background-color: var(--panel); border: 1px solid var(--border);
             border-radius: 8px; display: flex; flex-direction: column;
-            padding: 15px; overflow: hidden;
+            padding: 15px; flex: 1; 
+            min-width: 0; /* CRITICAL: Allows flex items to shrink below content width */
+            overflow: hidden;
         }
-        h2 {
-            margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid var(--border);
-            padding-bottom: 10px; color: var(--text); text-transform: uppercase;
-        }
+        /* Adjusted weights for vertical mode */
+        .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
+        .container:not(.horizontal-layout) #pane-2 { flex: 0.6; }
+        .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
+
+        h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
         .content-area { 
             flex-grow: 1; 
             overflow-y: auto; 
-            font-size: 1.05rem; 
-            display: flex; 
-            flex-direction: column; 
+            font-size: 1rem; 
+            word-break: break-word; /* Forces long words to wrap */
+            overflow-x: hidden;     /* Guarantees no horizontal scroll */
         }
-        .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
+        .chat-msg { 
+            margin-bottom: 8px; 
+            padding-bottom: 4px; 
+            width: 100%; 
+            display: block; /* Ensures message stays in its container */
+        }
         .user-name { font-weight: bold; }
-        .twitch-emote { vertical-align: middle; height: 30px; }
-        .badge-icon { 
-            height: 18px; 
-            width: 18px; 
-            vertical-align: middle; 
-            margin-right: 4px; 
-            border-radius: 2px;
-        }
+        .badge-icon { height: 18px; vertical-align: middle; margin-right: 4px; }
     </style>
 </head>
 <body id="body-tag">
 
-    <div id="status-indicator">Connecting to Streamer.bot...</div>
+    <div id="status-indicator">Connecting...</div>
 
     <div class="container" id="main-container">
-        <div class="column" id="pane-1" style="grid-column: 1;">
-            <h2 id="title-1">Live Chat</h2>
+        <div class="column" id="pane-1">
+            <h2>Live Chat</h2>
             <div id="area-1" class="content-area"></div>
         </div>
-        <div class="column" id="pane-2" style="grid-column: 2;">
-            <h2 id="title-2">Activity Feed</h2>
+        <div class="column" id="pane-2">
+            <h2>Activity</h2>
             <div id="area-2" class="content-area"></div>
         </div>
-        <div class="column" id="pane-3" style="grid-column: 3;">
-            <h2 id="title-3">Filtered Queue</h2>
+        <div class="column" id="pane-3">
+            <h2>Filtered Queue</h2>
             <div id="area-3" class="content-area"></div>
         </div>
     </div>
@@ -79,34 +89,27 @@
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
+        const container = document.getElementById('main-container');
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
-            queueCmd: localStorage.getItem('queueCmd') || '!c',
-            order: JSON.parse(localStorage.getItem('paneOrder')) || [1, 2, 3]
+            layout: localStorage.getItem('layout') || 'vertical',
+            queueCmd: localStorage.getItem('queueCmd') || '!c'
         };
 
         function applySettings() {
             const urlParams = new URLSearchParams(window.location.search);
-            const isQueueOnly = urlParams.get('view') === 'queue';
-
-            if (isQueueOnly) {
+            if (urlParams.get('view') === 'queue') {
                 document.getElementById('pane-1').style.display = 'none';
                 document.getElementById('pane-2').style.display = 'none';
-                document.getElementById('pane-3').style.gridColumn = '1 / span 3';
                 document.getElementById('status-indicator').style.display = 'none';
-                document.body.style.padding = '5px';
             } else {
                 if (settings.theme === 'light') document.body.classList.add('light-theme');
-                settings.order.forEach((pos, index) => {
-                    const pane = document.getElementById(`pane-${index + 1}`);
-                    if (pane) pane.style.gridColumn = pos;
-                });
+                if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
             }
         }
         applySettings();
 
         const client = new StreamerbotClient({
-            host: '127.0.0.1', port: 8080,
             onConnect: () => {
                 const indicator = document.getElementById('status-indicator');
                 indicator.innerText = 'Connected';
@@ -114,113 +117,44 @@
             }
         });
 
-        function formatEmotes(message, emotes) {
-            if (!emotes || emotes.length === 0) return message;
-            const sorted = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
-            let html = message;
-            sorted.forEach(e => {
-                const img = `<img class="twitch-emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${e.id}/default/dark/1.0">`;
-                html = html.slice(0, e.startIndex) + img + html.slice(e.endIndex + 1);
-            });
-            return html;
-        }
-
         function formatBadges(badges) {
-            if (!badges || badges.length === 0) return "";
-            let badgeHtml = "";
-            badges.forEach(b => {
-                // Use the image URL provided by Streamer.bot directly
-                const imageUrl = b.imageUrl || b.url || "";
-                if (imageUrl) {
-                    badgeHtml += `<img class="badge-icon" src="${imageUrl}" alt="${b.name}">`;
-                }
-            });
-            return badgeHtml;
-        }
-
-        function scrollToBottom(element) {
-            element.scrollTop = element.scrollHeight;
+            return (badges || []).map(b => `<img class="badge-icon" src="${b.imageUrl || b.url}" alt="${b.name}">`).join('');
         }
 
         client.on('Twitch.ChatMessage', (data) => {
-            const msgObj = data.data.message || {};
-            const raw = (msgObj.message || msgObj.text || data.data.rawInput || "").trim();
-            const user = msgObj.displayName || msgObj.username || "Unknown";
-            const userColor = msgObj.color || "var(--accent)";
-            const isMod = msgObj.isModerator || msgObj.isBroadcaster || false;
+            const msgObj = data.data.message;
+            const raw = msgObj.message.trim();
+            const user = msgObj.displayName;
+            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
+            // Layout Toggle Command
+            if (isMod && raw.toLowerCase() === '!layout') {
+                container.classList.toggle('horizontal-layout');
+                const current = container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical';
+                localStorage.setItem('layout', current);
+                return;
+            }
+
+            const badgeHtml = formatBadges(msgObj.badges);
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            if (raw.toLowerCase().includes('!qclear')) {
-                if (queueArea) queueArea.innerHTML = '';
-                return; 
-            }
+            // Render to Chat
+            const div = document.createElement('div');
+            div.className = 'chat-msg';
+            div.innerHTML = `${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${user}:</span> ${raw}`;
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
 
-            if (isMod) {
-                if (raw.toLowerCase().startsWith('!settheme ')) {
-                    const theme = raw.split(' ')[1];
-                    theme === 'light' ? document.body.classList.add('light-theme') : document.body.classList.remove('light-theme');
-                    localStorage.setItem('theme', theme);
-                    return;
-                }
-                if (raw.toLowerCase().startsWith('!reorder ')) {
-                    const parts = raw.split(' ');
-                    if (parts.length === 4) {
-                        const newOrder = [parts[1], parts[2], parts[3]];
-                        newOrder.forEach((pos, i) => {
-                            const pane = document.getElementById(`pane-${i+1}`);
-                            if (pane) pane.style.gridColumn = pos;
-                        });
-                        localStorage.setItem('paneOrder', JSON.stringify(newOrder));
-                    }
-                    return;
-                }
-                if (raw.toLowerCase().startsWith('!setcommand ')) {
-                    settings.queueCmd = raw.split(' ')[1];
-                    localStorage.setItem('queueCmd', settings.queueCmd);
-                    return;
-                }
-            }
-
-            const emotes = msgObj.emotes || [];
-            const msgHtml = formatEmotes(raw, emotes);
-            const badgeHtml = formatBadges(msgObj.badges || []);
-
-            if (chatArea) {
-                const chatDiv = document.createElement('div');
-                chatDiv.className = 'chat-msg';
-                chatDiv.innerHTML = `${badgeHtml}<span class="user-name" style="color: ${userColor}">${user}:</span> ${msgHtml}`;
-                chatArea.appendChild(chatDiv);
-                scrollToBottom(chatArea);
-            }
-
-            const trigger = settings.queueCmd.toLowerCase();
-            if (raw.toLowerCase().startsWith(trigger + ' ') && queueArea) {
-                const cleanHtml = msgHtml.substring(trigger.length).trim();
-                const qDiv = document.createElement('div');
-                qDiv.className = 'chat-msg';
+            // Render to Queue
+            if (raw.toLowerCase().startsWith(settings.queueCmd + ' ')) {
+                const qDiv = div.cloneNode(true);
                 qDiv.style.borderLeft = "4px solid var(--accent)";
-                qDiv.style.paddingLeft = "12px";
-                qDiv.innerHTML = `${badgeHtml}<span class="user-name" style="color: ${userColor}">${user}:</span> ${cleanHtml}`;
+                qDiv.style.paddingLeft = "8px";
                 queueArea.appendChild(qDiv);
-                scrollToBottom(queueArea);
+                queueArea.scrollTop = queueArea.scrollHeight;
             }
         });
-
-        const activityArea = document.getElementById('area-2');
-        const logEvent = (html) => {
-            if (activityArea) {
-                const div = document.createElement('div');
-                div.className = 'chat-msg';
-                div.innerHTML = html;
-                activityArea.appendChild(div);
-                scrollToBottom(activityArea);
-            }
-        };
-
-        client.on('Twitch.Follow', (d) => logEvent(`<span class="event-text">✨ ${d.data.user_name} followed!</span>`));
-        client.on('Twitch.Subscription', (d) => logEvent(`<span class="event-text">💜 ${d.data.user_name} subbed!</span>`));
     </script>
 </body>
 </html>

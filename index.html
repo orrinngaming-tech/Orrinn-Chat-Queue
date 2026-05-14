@@ -67,7 +67,6 @@
     
     <script>
         // --- 1. LOAD SAVED SETTINGS ---
-        // This is handled automatically by the browser to preserve user-specific layouts
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
@@ -107,19 +106,22 @@
 
         // --- 4. CORE MESSAGE & COMMAND LOGIC ---
         client.on('Twitch.ChatMessage', (data) => {
-            const user = data.data.message.displayName;
-            const raw = data.data.message.message.trim();
-            const isMod = data.data.message.isModerator || data.data.message.isBroadcaster;
-            const emotes = data.data.message.emotes;
-            const msgHtml = formatEmotes(raw, emotes);
+            const msgObj = data.data.message;
+            const raw = (msgObj.message || msgObj.text || "").trim();
+            const user = msgObj.displayName || msgObj.username;
+            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
+            const emotes = msgObj.emotes || [];
             
+            const msgHtml = formatEmotes(raw, emotes);
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
             // COMMAND: !qclear (Broadcaster & Mod Only)
-            if (raw.toLowerCase() === '!qclear' && isMod) {
-                if (queueArea) queueArea.innerHTML = '';
-                return;
+            if (raw.toLowerCase() === '!qclear') {
+                if (isMod && queueArea) {
+                    queueArea.innerHTML = '';
+                }
+                return; // Exit here so it doesn't appear in Live Chat
             }
 
             // COMMAND: !settheme [light/dark]
@@ -161,9 +163,8 @@
             }
 
             // RENDER TO FILTERED QUEUE
-            // Logic specifically targeting your !c (or custom) command
-            if (raw.toLowerCase().startsWith(settings.queueCmd + ' ') && queueArea) {
-                const cleanHtml = msgHtml.replace(new RegExp('^' + settings.queueCmd + '\\s+', 'i'), '');
+            if (raw.toLowerCase().startsWith(settings.queueCmd.toLowerCase() + ' ') && queueArea) {
+                const cleanHtml = msgHtml.slice(settings.queueCmd.length).trim();
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";

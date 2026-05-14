@@ -37,7 +37,7 @@
             padding: 15px; flex: 1; min-width: 0; overflow: hidden;
         }
         .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
-        .container:not(.horizontal-layout) #pane-2 { flex: 0.8; } /* Slightly wider for longer event text */
+        .container:not(.horizontal-layout) #pane-2 { flex: 0.8; }
         .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
 
         h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; text-transform: uppercase; }
@@ -126,6 +126,16 @@
             const user = msgObj.displayName;
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
+            const chatArea = document.getElementById('area-1');
+            const queueArea = document.getElementById('area-3');
+
+            // restored !qclear logic
+            if (isMod && raw.toLowerCase() === '!qclear') {
+                if (queueArea) queueArea.innerHTML = '';
+                return;
+            }
+
+            // layout toggle
             if (isMod && raw.toLowerCase() === '!layout') {
                 container.classList.toggle('horizontal-layout');
                 localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
@@ -134,8 +144,6 @@
 
             const emoteHtml = formatEmotes(raw, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
-            const chatArea = document.getElementById('area-1');
-            const queueArea = document.getElementById('area-3');
 
             const div = document.createElement('div');
             div.className = 'chat-msg';
@@ -157,7 +165,6 @@
             }
         });
 
-        // --- ENHANCED ACTIVITY LOGGING ---
         const activityArea = document.getElementById('area-2');
         const logEvent = (html, subtext = "") => {
             const div = document.createElement('div');
@@ -168,34 +175,15 @@
             activityArea.prepend(div); 
         };
 
-        // Redemptions (Matches the orange circles in image_cafe7e.png)
         client.on('Twitch.RewardRedemption', (d) => {
-            const user = d.data.user_name;
-            const reward = d.data.reward.title;
-            const input = d.data.user_input ? `"${d.data.user_input}"` : "";
-            logEvent(`🟡 <b>${reward}</b>`, `Redeemed by ${user} ${input}`);
+            logEvent(`🟡 <b>${d.data.reward.title}</b>`, `Redeemed by ${d.data.user_name} ${d.data.user_input ? `"${d.data.user_input}"` : ""}`);
         });
-
-        // Follows
         client.on('Twitch.Follow', (d) => logEvent(`💖 <b>${d.data.user_name}</b> followed!`));
-
-        // Shoutouts (Sent or Received)
         client.on('Twitch.ShoutoutCreated', (d) => logEvent(`📢 <b>Shoutout!</b>`, `To ${d.data.to_broadcaster_user_name} (${d.data.viewer_count} viewers)`));
-
-        // Stream Streaks (Matches the fire icon in image_cafe7e.png)
-        // Note: This often comes through as a Chat Announcement or specific bot event
-        client.on('Twitch.Announcement', (d) => {
-            if (d.data.message.toLowerCase().includes('streak')) {
-                logEvent(`🔥 <b>Stream Streak!</b>`, d.data.message);
-            }
-        });
-
-        // Subscriptions
+        client.on('Twitch.Announcement', (d) => { if (d.data.message.toLowerCase().includes('streak')) logEvent(`🔥 <b>Stream Streak!</b>`, d.data.message); });
         client.on('Twitch.Subscription', (d) => logEvent(`💜 <b>${d.data.user_name}</b> subbed!`));
         client.on('Twitch.GiftSubscription', (d) => logEvent(`🎁 <b>${d.data.user_name}</b> gifted a sub!`));
         client.on('Twitch.GiftBomb', (d) => logEvent(`💣 <b>${d.data.user_name}</b> gifted ${d.data.gifts} subs!`));
-
-        // Interaction/Hype
         client.on('Twitch.HypeTrainBegin', (d) => logEvent(`🚂 <b>Hype Train Started!</b>`, `Level ${d.data.level}`));
         client.on('Twitch.Raid', (d) => logEvent(`⚔️ <b>${d.data.from_broadcaster_user_name}</b> raided!`, `With ${d.data.viewers} viewers`));
         client.on('Twitch.Cheer', (d) => logEvent(`✨ <b>${d.data.user_name}</b> cheered ${d.data.bits} bits!`));

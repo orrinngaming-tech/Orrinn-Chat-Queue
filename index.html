@@ -79,7 +79,6 @@
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
-        // --- 1. SETTINGS & OBS MODE ---
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
@@ -91,14 +90,12 @@
             const isQueueOnly = urlParams.get('view') === 'queue';
 
             if (isQueueOnly) {
-                // OBS Dock Mode: Hide everything except Queue
                 document.getElementById('pane-1').style.display = 'none';
                 document.getElementById('pane-2').style.display = 'none';
                 document.getElementById('pane-3').style.gridColumn = '1 / span 3';
                 document.getElementById('status-indicator').style.display = 'none';
                 document.body.style.padding = '5px';
             } else {
-                // Normal Dashboard Mode
                 if (settings.theme === 'light') document.body.classList.add('light-theme');
                 settings.order.forEach((pos, index) => {
                     const pane = document.getElementById(`pane-${index + 1}`);
@@ -117,7 +114,6 @@
             }
         });
 
-        // --- 2. HELPERS ---
         function formatEmotes(message, emotes) {
             if (!emotes || emotes.length === 0) return message;
             const sorted = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
@@ -132,23 +128,11 @@
         function formatBadges(badges) {
             if (!badges || badges.length === 0) return "";
             let badgeHtml = "";
-            
-            // Map common badges to static Twitch URLs
-            const badgeMap = {
-                'broadcaster': 'https://static-cdn.jtvnw.net/badges/v1/5527c47c-427b-4863-bb3a-9f271f38113c/1',
-                'moderator': 'https://static-cdn.jtvnw.net/badges/v1/326785d4-dcaf-4483-977c-590b0712750e/1',
-                'vip': 'https://static-cdn.jtvnw.net/badges/v1/b817aba4-fad8-49e2-b88a-7cc744dfa6ec/1',
-                'partner': 'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b7897a7403a3/1',
-                'subscriber': 'https://static-cdn.jtvnw.net/badges/v1/5d9fc2c4-b030-4e9b-81f1-08107954930e/1'
-            };
-
             badges.forEach(b => {
-                // Check both b.name and b.badge to be safe
-                const rawName = b.name || b.badge || "";
-                const cleanName = rawName.toLowerCase();
-                const url = badgeMap[cleanName];
-                if (url) {
-                    badgeHtml += `<img class="badge-icon" src="${url}" alt="${cleanName}">`;
+                // Use the image URL provided by Streamer.bot directly
+                const imageUrl = b.imageUrl || b.url || "";
+                if (imageUrl) {
+                    badgeHtml += `<img class="badge-icon" src="${imageUrl}" alt="${b.name}">`;
                 }
             });
             return badgeHtml;
@@ -158,7 +142,6 @@
             element.scrollTop = element.scrollHeight;
         }
 
-        // --- 3. CORE MESSAGE HANDLING ---
         client.on('Twitch.ChatMessage', (data) => {
             const msgObj = data.data.message || {};
             const raw = (msgObj.message || msgObj.text || data.data.rawInput || "").trim();
@@ -202,10 +185,8 @@
 
             const emotes = msgObj.emotes || [];
             const msgHtml = formatEmotes(raw, emotes);
-            // Pass the entire badges array to the helper
             const badgeHtml = formatBadges(msgObj.badges || []);
 
-            // Render Live Chat
             if (chatArea) {
                 const chatDiv = document.createElement('div');
                 chatDiv.className = 'chat-msg';
@@ -214,7 +195,6 @@
                 scrollToBottom(chatArea);
             }
 
-            // Render Filtered Queue
             const trigger = settings.queueCmd.toLowerCase();
             if (raw.toLowerCase().startsWith(trigger + ' ') && queueArea) {
                 const cleanHtml = msgHtml.substring(trigger.length).trim();
@@ -228,7 +208,6 @@
             }
         });
 
-        // --- 4. ACTIVITY LOGGING ---
         const activityArea = document.getElementById('area-2');
         const logEvent = (html) => {
             if (activityArea) {

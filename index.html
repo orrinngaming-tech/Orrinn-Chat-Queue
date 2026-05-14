@@ -8,7 +8,7 @@
         body {
             background-color: #121212;
             color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
             margin: 0;
             padding: 20px;
             display: flex;
@@ -26,7 +26,6 @@
             background-color: #1e1e1e;
             color: #ff4444; 
             border: 1px solid #333;
-            transition: all 0.3s ease;
         }
 
         .container {
@@ -49,19 +48,17 @@
 
         h2 {
             margin-top: 0;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             border-bottom: 1px solid #333;
             padding-bottom: 10px;
             color: #ffffff;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .content-area {
             flex-grow: 1;
             overflow-y: auto;
             font-size: 0.9rem;
-            line-height: 1.4;
         }
 
         .chat-msg {
@@ -76,10 +73,10 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .user-name {
-            color: #bb86fc;
-            font-weight: bold;
-        }
+        .user-name { color: #bb86fc; font-weight: bold; }
+        .event-text { color: #03dac6; font-style: italic; }
+        .bits-text { color: #ffb74d; font-weight: bold; } /* Orange for bits */
+        .redeem-text { color: #f06292; font-weight: bold; } /* Pink for points */
     </style>
 </head>
 <body>
@@ -105,44 +102,92 @@
     
     <script>
         const statusIndicator = document.getElementById('status-indicator');
+        const activityArea = document.getElementById('activity-feed');
 
-        // Update UI to Connected
         function setConnected() {
             statusIndicator.innerText = 'Connected';
             statusIndicator.style.color = '#00ff00';
             statusIndicator.style.borderColor = '#00ff00';
-            console.log('Handshake successful.');
         }
 
-        // Update UI to Disconnected
         function setDisconnected() {
             statusIndicator.innerText = 'Connecting to Streamer.bot...';
             statusIndicator.style.color = '#ff4444';
             statusIndicator.style.borderColor = '#333';
         }
 
-        // Initialize Client with callback functions to avoid "Invalid event" warnings
         const client = new StreamerbotClient({
             host: '127.0.0.1',
             port: 8080,
             immediate: true,
             onConnect: setConnected,
-            onDisconnect: setDisconnected,
-            onError: (err) => console.error('Bot Error:', err)
+            onDisconnect: setDisconnected
         });
 
-        // Chat Message Logic
+        // Helper to push to Activity Feed
+        function logActivity(html) {
+            if (activityArea) {
+                const div = document.createElement('div');
+                div.className = 'chat-msg';
+                div.innerHTML = html;
+                activityArea.prepend(div);
+            }
+        }
+
+        // --- 1. CHAT & QUEUE LOGIC ---
         client.on('Twitch.ChatMessage', (data) => {
-            const { displayName, message } = data.data;
+            const user = data.data.message.displayName;
+            const msg = data.data.message.message;
+            
             const chatArea = document.getElementById('live-chat');
+            const queueArea = document.getElementById('filtered-queue');
             
             if (chatArea) {
-                const msgDiv = document.createElement('div');
-                msgDiv.className = 'chat-msg';
-                msgDiv.innerHTML = `<span class="user-name">${displayName}:</span> ${message}`;
-                chatArea.prepend(msgDiv);
+                const div = document.createElement('div');
+                div.className = 'chat-msg';
+                div.innerHTML = `<span class="user-name">${user}:</span> ${msg}`;
+                chatArea.prepend(div);
+            }
+
+            // Command logic for your !c filter
+            if (msg.toLowerCase().startsWith('!c ') && queueArea) {
+                const cleanMsg = msg.substring(3).trim();
+                const div = document.createElement('div');
+                div.className = 'chat-msg';
+                div.style.borderLeft = "3px solid #bb86fc";
+                div.style.paddingLeft = "10px";
+                div.innerHTML = `<span class="user-name">${user}:</span> ${cleanMsg}`;
+                queueArea.prepend(div);
             }
         });
+
+        // --- 2. EXTENDED ACTIVITY FEED LOGIC ---
+
+        // Follows
+        client.on('Twitch.Follow', (data) => {
+            logActivity(`<span class="event-text">✨ ${data.data.user_name} followed!</span>`);
+        });
+
+        // Subscriptions
+        client.on('Twitch.Subscription', (data) => {
+            logActivity(`<span class="event-text">💜 ${data.data.user_name} subbed!</span>`);
+        });
+
+        // Bits / Cheers
+        client.on('Twitch.Cheer', (data) => {
+            logActivity(`<span class="bits-text">💎 ${data.data.user_name} cheered ${data.data.bits} bits!</span>`);
+        });
+
+        // Channel Point Redemptions
+        client.on('Twitch.RewardRedemption', (data) => {
+            logActivity(`<span class="redeem-text">🎁 ${data.data.user_name} redeemed: ${data.data.reward.title}</span>`);
+        });
+
+        // Raids
+        client.on('Twitch.Raid', (data) => {
+            logActivity(`<span class="event-text">⚔️ RAID! ${data.data.from_broadcaster_user_name} brought ${data.data.viewers} viewers!</span>`);
+        });
+
     </script>
 </body>
 </html>

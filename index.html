@@ -19,13 +19,14 @@
 
         #status-indicator {
             font-weight: bold;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 20px;
             border-radius: 4px;
             text-align: center;
             background-color: #1e1e1e;
             color: #ff4444; 
             border: 1px solid #333;
+            font-size: 1.1rem; /* Slightly larger status */
         }
 
         .container {
@@ -48,7 +49,7 @@
 
         h2 {
             margin-top: 0;
-            font-size: 1.1rem;
+            font-size: 1.3rem; /* Increased Heading Size */
             border-bottom: 1px solid #333;
             padding-bottom: 10px;
             color: #ffffff;
@@ -58,25 +59,27 @@
         .content-area {
             flex-grow: 1;
             overflow-y: auto;
-            font-size: 0.9rem;
+            font-size: 1.1rem; /* Increased Body Text Size */
         }
 
         .chat-msg {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             border-bottom: 1px solid #2a2a2a;
-            padding-bottom: 4px;
-            animation: fadeIn 0.3s ease;
+            padding-bottom: 6px;
+            line-height: 1.5;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Emote Styling */
+        .twitch-emote {
+            vertical-align: middle;
+            height: 28px; /* Scales with larger text */
+            margin: -2px 1px;
         }
 
         .user-name { color: #bb86fc; font-weight: bold; }
         .event-text { color: #03dac6; font-style: italic; }
-        .bits-text { color: #ffb74d; font-weight: bold; } /* Orange for bits */
-        .redeem-text { color: #f06292; font-weight: bold; } /* Pink for points */
+        .bits-text { color: #ffb74d; font-weight: bold; }
+        .redeem-text { color: #f06292; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -124,7 +127,24 @@
             onDisconnect: setDisconnected
         });
 
-        // Helper to push to Activity Feed
+        // Helper to replace text with Emote Images
+        function formatEmotes(message, emotes) {
+            if (!emotes || emotes.length === 0) return message;
+            
+            // Sort emotes backwards to prevent index shifting while replacing
+            const sortedEmotes = [...emotes].sort((a, b) => b.startIndex - a.startIndex);
+            let formattedMessage = message;
+
+            sortedEmotes.forEach(emote => {
+                const imgTag = `<img class="twitch-emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${emote.id}/default/dark/1.0" alt="${emote.name}">`;
+                const before = formattedMessage.slice(0, emote.startIndex);
+                const after = formattedMessage.slice(emote.endIndex + 1);
+                formattedMessage = before + imgTag + after;
+            });
+
+            return formattedMessage;
+        }
+
         function logActivity(html) {
             if (activityArea) {
                 const div = document.createElement('div');
@@ -134,10 +154,13 @@
             }
         }
 
-        // --- 1. CHAT & QUEUE LOGIC ---
         client.on('Twitch.ChatMessage', (data) => {
             const user = data.data.message.displayName;
-            const msg = data.data.message.message;
+            const rawMsg = data.data.message.message;
+            const emotes = data.data.message.emotes;
+            
+            // Apply Emote Formatting
+            const msgHtml = formatEmotes(rawMsg, emotes);
             
             const chatArea = document.getElementById('live-chat');
             const queueArea = document.getElementById('filtered-queue');
@@ -145,48 +168,32 @@
             if (chatArea) {
                 const div = document.createElement('div');
                 div.className = 'chat-msg';
-                div.innerHTML = `<span class="user-name">${user}:</span> ${msg}`;
+                div.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml}`;
                 chatArea.prepend(div);
             }
 
-            // Command logic for your !c filter
-            if (msg.toLowerCase().startsWith('!c ') && queueArea) {
-                const cleanMsg = msg.substring(3).trim();
+            if (rawMsg.toLowerCase().startsWith('!c ') && queueArea) {
+                // Strip the !c and re-format just in case there are emotes in the remainder
+                const cleanRaw = rawMsg.substring(3).trim();
+                // Note: Emote indices change when we strip "!c ", so we just re-run the formatter
+                // or display the already formatted version minus the command
+                const cleanHtml = msgHtml.replace(/^!c\s+/i, ''); 
+                
                 const div = document.createElement('div');
                 div.className = 'chat-msg';
                 div.style.borderLeft = "3px solid #bb86fc";
                 div.style.paddingLeft = "10px";
-                div.innerHTML = `<span class="user-name">${user}:</span> ${cleanMsg}`;
+                div.innerHTML = `<span class="user-name">${user}:</span> ${cleanHtml}`;
                 queueArea.prepend(div);
             }
         });
 
-        // --- 2. EXTENDED ACTIVITY FEED LOGIC ---
-
-        // Follows
-        client.on('Twitch.Follow', (data) => {
-            logActivity(`<span class="event-text">✨ ${data.data.user_name} followed!</span>`);
-        });
-
-        // Subscriptions
-        client.on('Twitch.Subscription', (data) => {
-            logActivity(`<span class="event-text">💜 ${data.data.user_name} subbed!</span>`);
-        });
-
-        // Bits / Cheers
-        client.on('Twitch.Cheer', (data) => {
-            logActivity(`<span class="bits-text">💎 ${data.data.user_name} cheered ${data.data.bits} bits!</span>`);
-        });
-
-        // Channel Point Redemptions
-        client.on('Twitch.RewardRedemption', (data) => {
-            logActivity(`<span class="redeem-text">🎁 ${data.data.user_name} redeemed: ${data.data.reward.title}</span>`);
-        });
-
-        // Raids
-        client.on('Twitch.Raid', (data) => {
-            logActivity(`<span class="event-text">⚔️ RAID! ${data.data.from_broadcaster_user_name} brought ${data.data.viewers} viewers!</span>`);
-        });
+        // Activity Feed Listeners
+        client.on('Twitch.Follow', (data) => logActivity(`<span class="event-text">✨ ${data.data.user_name} followed!</span>`));
+        client.on('Twitch.Subscription', (data) => logActivity(`<span class="event-text">💜 ${data.data.user_name} subbed!</span>`));
+        client.on('Twitch.Cheer', (data) => logActivity(`<span class="bits-text">💎 ${data.data.user_name} cheered ${data.data.bits} bits!</span>`));
+        client.on('Twitch.RewardRedemption', (data) => logActivity(`<span class="redeem-text">🎁 ${data.data.user_name} redeemed: ${data.data.reward.title}</span>`));
+        client.on('Twitch.Raid', (data) => logActivity(`<span class="event-text">⚔️ RAID! ${data.data.from_broadcaster_user_name} brought ${data.data.viewers} viewers!</span>`));
 
     </script>
 </body>

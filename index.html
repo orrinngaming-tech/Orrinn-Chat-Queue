@@ -4,82 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Streamer Dashboard</title>
-    <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-
-        #status-indicator {
-            font-size: 0.9em;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        .connected { color: #4caf50; }
-        .disconnected { color: #f44336; }
-
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            flex-grow: 1;
-            overflow: hidden;
-        }
-
-        .column {
-            background-color: #1e1e1e;
-            border-radius: 8px;
-            border: 1px solid #333;
-            display: flex;
-            flex-direction: column;
-            padding: 10px;
-        }
-
-        h2 {
-            font-size: 1.1em;
-            text-transform: uppercase;
-            border-bottom: 2px solid #333;
-            padding-bottom: 5px;
-            margin-top: 0;
-        }
-
-        .content-area {
-            flex-grow: 1;
-            overflow-y: auto;
-            margin-top: 10px;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="status-indicator" class="disconnected">Connecting to Streamer.bot...</div>
+    <div id="status-indicator" class="status-disconnected">Connecting to Streamer.bot...</div>
 
-    <div class="dashboard-container">
+    <div class="container">
         <div class="column">
-            <h2>Live Chat</h2>
+            <h2>LIVE CHAT</h2>
             <div id="live-chat" class="content-area"></div>
         </div>
-
         <div class="column">
-            <h2>Activity Feed</h2>
+            <h2>ACTIVITY FEED</h2>
             <div id="activity-feed" class="content-area"></div>
         </div>
-
         <div class="column">
-            <h2>Filtered Queue</h2>
+            <h2>FILTERED QUEUE</h2>
             <div id="filtered-queue" class="content-area"></div>
         </div>
     </div>
 
-    <!-- The 'defer' attribute ensures these load in order and don't block the page -->
-    <script src="https://unpkg.com/@streamerbot/client@1.1.2/dist/streamerbot-client.js" defer></script>
-    <script src="main.js" defer></script>
+    <!-- CRITICAL: Load the library FIRST -->
+    <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
+    
+    <!-- Load your logic SECOND -->
+    <script src="main.js"></script>
 </body>
 </html>

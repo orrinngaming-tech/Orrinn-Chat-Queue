@@ -20,6 +20,14 @@
             height: 100vh; box-sizing: border-box; transition: background 0.3s;
             overflow: hidden;
         }
+        
+        /* DOCK MODE CSS */
+        body.view-queue-only { padding: 5px; }
+        body.view-queue-only #status-indicator,
+        body.view-queue-only #pane-1,
+        body.view-queue-only #pane-2 { display: none !important; }
+        body.view-queue-only #pane-3 { flex: 1; border: none; }
+
         #status-indicator {
             font-weight: bold; padding: 10px; margin-bottom: 15px;
             border-radius: 4px; text-align: center;
@@ -37,7 +45,6 @@
             padding: 15px; flex: 1; min-width: 0; overflow: hidden;
         }
 
-        /* FLEX RATIOS: Chat(1.2) | Activity(0.8) | Queue(1.2) */
         .container:not(.horizontal-layout) #pane-1 { flex: 1.2; }
         .container:not(.horizontal-layout) #pane-2 { flex: 0.8; }
         .container:not(.horizontal-layout) #pane-3 { flex: 1.2; }
@@ -78,7 +85,13 @@
         const area2 = document.getElementById('area-2');
         const area3 = document.getElementById('area-3');
 
-        // Initial Settings Load
+        // CHECK FOR VIEW PARAMETER
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewMode = urlParams.get('view');
+        if (viewMode === 'queue') {
+            body.classList.add('view-queue-only');
+        }
+
         let settings = {
             theme: localStorage.getItem('theme') || 'dark',
             layout: localStorage.getItem('layout') || 'vertical',
@@ -86,7 +99,6 @@
             showTime: localStorage.getItem('showTime') !== 'false'
         };
 
-        // Apply saved states on boot
         if (settings.theme === 'light') body.classList.add('light-theme');
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
@@ -126,15 +138,13 @@
             
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // --- COMMAND HANDLING ---
             if (isMod) {
                 if (lowerText.startsWith("!qclear")) {
                     area3.innerHTML = "";
                     return;
                 } else if (lowerText.startsWith("!time")) {
                     const isHidden = body.classList.toggle('hide-chat-time');
-                    settings.showTime = !isHidden;
-                    localStorage.setItem('showTime', settings.showTime);
+                    localStorage.setItem('showTime', !isHidden);
                     return; 
                 } else if (lowerText.startsWith("!settheme")) {
                     if (lowerText.includes("light")) {
@@ -160,8 +170,6 @@
                     const p1 = document.getElementById('pane-1');
                     const p2 = document.getElementById('pane-2');
                     const p3 = document.getElementById('pane-3');
-                    
-                    // Specific mapping: !reorder 3 1 2 -> p3=1st, p1=2nd, p2=3rd
                     if (args.length >= 4) {
                         const orderMap = { "1": p1, "2": p2, "3": p3 };
                         if (orderMap[args[1]]) orderMap[args[1]].style.order = "1";
@@ -172,30 +180,24 @@
                 }
             }
 
-            // --- UI RENDERING ---
             const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const userColor = msgObj.color || '#bb86fc';
             const baseContent = `<span class="timestamp">${timeStr}</span>${badgeHtml}<span class="user-name" style="color:${userColor}">${msgObj.displayName}:</span> `;
 
-            // Standard Chat
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
             chatDiv.innerHTML = baseContent + emoteHtml;
             area1.appendChild(chatDiv);
             area1.scrollTop = area1.scrollHeight;
 
-            // Filtered Queue Check
             const trigger = settings.queueCmd.toLowerCase();
             if (lowerText.startsWith(trigger)) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                
-                // Strip the trigger word from display
                 const displayMsg = emoteHtml.replace(new RegExp('^' + trigger, 'i'), '').trim();
-                
                 qDiv.innerHTML = baseContent + (displayMsg || "<em>[Empty Message]</em>");
                 area3.appendChild(qDiv);
                 area3.scrollTop = area3.scrollHeight;

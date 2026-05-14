@@ -47,20 +47,22 @@
             word-break: break-word; overflow-x: hidden;     
         }
         .chat-msg { margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
+        
+        /* Timestamp styling - Stacked above name */
         .timestamp { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
+        
+        /* Toggle Logic for Live Chat only */
+        .hide-chat-time #area-1 .timestamp { display: none !important; }
+
         .user-name { font-weight: bold; }
         .twitch-emote { vertical-align: middle; height: 28px; margin: 0 2px; }
         .badge-icon { height: 18px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
         .event-text { color: #03dac6; font-size: 0.95rem; }
-        .event-subtext { color: #888; font-size: 0.85rem; font-style: italic; display: block; margin-top: 2px; }
-        
-        /* Hidden state for live chat timestamps */
-        .hide-timestamps .timestamp { display: none; }
     </style>
 </head>
 <body id="body-tag">
 
-    <div id="status-indicator">Connecting to Streamer.bot...</div>
+    <div id="status-indicator">Connecting...</div>
 
     <div class="container" id="main-container">
         <div class="column" id="pane-1"><h2>Live Chat</h2><div id="area-1" class="content-area"></div></div>
@@ -71,37 +73,26 @@
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
+        const body = document.getElementById('body-tag');
         const container = document.getElementById('main-container');
-        const chatArea = document.getElementById('area-1');
-        const qArea = document.getElementById('area-3');
 
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             layout: localStorage.getItem('layout') || 'vertical',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
-            showTime: localStorage.getItem('showTime') === 'true' // Load saved preference
+            showTime: localStorage.getItem('showTime') !== 'false'
         };
 
-        function applySettings() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('view') === 'queue') {
-                document.getElementById('pane-1').style.display = 'none';
-                document.getElementById('pane-2').style.display = 'none';
-                document.getElementById('status-indicator').style.display = 'none';
-                document.body.style.padding = '5px';
-            } else {
-                if (settings.theme === 'light') document.body.classList.add('light-theme');
-                if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
-                if (!settings.showTime) chatArea.classList.add('hide-timestamps');
-            }
-        }
-        applySettings();
+        // Apply visual settings immediately
+        if (settings.theme === 'light') body.classList.add('light-theme');
+        if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
+        if (!settings.showTime) body.classList.add('hide-chat-time');
 
         const client = new StreamerbotClient({
             onConnect: () => {
-                const indicator = document.getElementById('status-indicator');
-                indicator.innerText = 'Connected';
-                indicator.style.color = '#00ff00';
+                const si = document.getElementById('status-indicator');
+                si.innerText = 'Connected';
+                si.style.color = '#00ff00';
             }
         });
 
@@ -117,81 +108,85 @@
         }
 
         function formatBadges(badges) {
-            return (badges || []).map(b => `<img class="badge-icon" src="${b.imageUrl || b.url}" alt="${b.name}">`).join('');
-        }
-
-        function getTimestamp() {
-            return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return (badges || []).map(b => `<img class="badge-icon" src="${b.imageUrl || b.url}">`).join('');
         }
 
         client.on('Twitch.ChatMessage', (data) => {
             const msgObj = data.data.message;
             if (!msgObj) return;
 
-            const cleanMessage = (msgObj.message || "").toString().trim();
-            const lowerMessage = cleanMessage.toLowerCase();
+            const rawText = (msgObj.message || "").toString();
+            const lowerText = rawText.toLowerCase().trim();
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
-            const time = getTimestamp();
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // --- COMMAND HANDLING ---
+            // --- COMMAND HANDLING (MOD ONLY) ---
             if (isMod) {
-                if (lowerMessage.includes('!qclear')) {
-                    if (qArea) qArea.innerHTML = '';
+                // Wipe Filtered Queue
+                if (lowerText.includes('!qclear')) {
+                    document.getElementById('area-3').innerHTML = '';
+                    console.log("Queue Cleared via Command");
                 }
-                if (lowerMessage.includes('!layout')) {
+                // Toggle Timestamps in Live Chat
+                if (lowerText === '!time') {
+                    const hidden = body.classList.toggle('hide-chat-time');
+                    localStorage.setItem('showTime', !hidden);
+                    return;
+                }
+                // Toggle Layout
+                if (lowerText === '!layout') {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
                 }
-                if (lowerMessage.includes('!time')) {
-                    const active = chatArea.classList.toggle('hide-timestamps');
-                    localStorage.setItem('showTime', !active);
-                    return;
-                }
             }
 
-            // --- RENDERING ---
-            const emoteHtml = formatEmotes(cleanMessage, msgObj.emotes || []);
+            // --- UI RENDERING ---
+            const chatArea = document.getElementById('area-1');
+            const queueArea = document.getElementById('area-3');
+            const emoteHtml = formatEmotes(rawText.trim(), msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
+            const nameColor = msgObj.color || "#bb86fc";
 
-            // Live Chat Entry
-            const div = document.createElement('div');
-            div.className = 'chat-msg';
-            div.innerHTML = `<span class="timestamp">${time}</span>${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${msgObj.displayName}:</span> ${emoteHtml}`;
-            chatArea.appendChild(div);
+            // Standard HTML Template (Timestamp on Top)
+            const fullMessageHTML = `
+                <span class="timestamp">${time}</span>
+                ${badgeHtml}<span class="user-name" style="color:${nameColor}">${msgObj.displayName}:</span> ${emoteHtml}
+            `;
+
+            // Add to Live Chat
+            const chatDiv = document.createElement('div');
+            chatDiv.className = 'chat-msg';
+            chatDiv.innerHTML = fullMessageHTML;
+            chatArea.appendChild(chatDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // --- QUEUE LOGIC ---
+            // Add to Filtered Queue (Trigger Check)
             const trigger = settings.queueCmd.toLowerCase();
-            if (lowerMessage.startsWith(trigger + ' ') && !lowerMessage.includes('!qclear')) {
-                const queueContent = emoteHtml.substring(trigger.length).trim();
+            if (lowerText.startsWith(trigger + ' ') && !lowerText.includes('!qclear')) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                // Timestamps are ALWAYS shown in Queue for tracking purposes
-                qDiv.innerHTML = `<span class="timestamp">${time}</span>${badgeHtml}<span class="user-name" style="color:${msgObj.color}">${msgObj.displayName}:</span> ${queueContent}`;
-                qArea.appendChild(qDiv);
-                qArea.scrollTop = qArea.scrollHeight;
+                // Strip the trigger word for the queue pane
+                const cleanQueueText = emoteHtml.substring(trigger.length).trim();
+                qDiv.innerHTML = `<span class="timestamp">${time}</span>${badgeHtml}<span class="user-name" style="color:${nameColor}">${msgObj.displayName}:</span> ${cleanQueueText}`;
+                queueArea.appendChild(qDiv);
+                queueArea.scrollTop = queueArea.scrollHeight;
             }
         });
 
-        // Activity Feed remains same as previous (Events shouldn't need toggled timestamps usually)
-        const activityArea = document.getElementById('area-2');
-        const logEvent = (html, subtext = "") => {
+        // Simplified Activity Feed
+        const logEvent = (text) => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            div.innerHTML = `<span class="event-text">${html}</span>` + (subtext ? `<span class="event-subtext">${subtext}</span>` : "");
-            activityArea.prepend(div); 
+            div.innerHTML = `<span class="event-text">${text}</span>`;
+            document.getElementById('area-2').prepend(div); 
         };
 
-        client.on('Twitch.RewardRedemption', (d) => logEvent(`🟡 <b>${d.data.reward.title}</b>`, `Redeemed by ${d.data.user_name}`));
-        client.on('Twitch.Follow', (d) => logEvent(`💖 <b>${d.data.user_name}</b> followed!`));
-        client.on('Twitch.ShoutoutCreated', (d) => logEvent(`📢 <b>Shoutout!</b>`, `To ${d.data.to_broadcaster_user_name}`));
-        client.on('Twitch.Announcement', (d) => { if (d.data.message.toLowerCase().includes('streak')) logEvent(`🔥 <b>Stream Streak!</b>`, d.data.message); });
-        client.on('Twitch.Subscription', (d) => logEvent(`💜 <b>${d.data.user_name}</b> subbed!`));
-        client.on('Twitch.Raid', (d) => logEvent(`⚔️ <b>${d.data.from_broadcaster_user_name}</b> raided!`, `With ${d.data.viewers} viewers`));
-        client.on('Twitch.Cheer', (d) => logEvent(`✨ <b>${d.data.user_name}</b> cheered ${d.data.bits} bits!`));
+        client.on('Twitch.Follow', (d) => logEvent(`💖 ${d.data.user_name} followed!`));
+        client.on('Twitch.Subscription', (d) => logEvent(`💜 ${d.data.user_name} subbed!`));
+        client.on('Twitch.Raid', (d) => logEvent(`⚔️ ${d.data.from_broadcaster_user_name} raided!`));
     </script>
 </body>
 </html>

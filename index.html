@@ -122,27 +122,29 @@
 
         client.on('Twitch.ChatMessage', (data) => {
             const msgObj = data.data.message;
-            const raw = msgObj.message.trim();
-            const user = msgObj.displayName;
+            const raw = msgObj.message.trim().toLowerCase();
             const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
+            // --- PRIORITY 1: MODERATOR COMMANDS ---
+            // We check these BEFORE processing anything else
+            if (isMod) {
+                if (raw === '!qclear') {
+                    document.getElementById('area-3').innerHTML = '';
+                    return; // Stop processing so !qclear doesn't appear in chat
+                }
+                if (raw === '!layout') {
+                    container.classList.toggle('horizontal-layout');
+                    localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
+                    return;
+                }
+            }
+
+            // --- PRIORITY 2: CHAT RENDERING ---
+            const user = msgObj.displayName;
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // restored !qclear logic
-            if (isMod && raw.toLowerCase() === '!qclear') {
-                if (queueArea) queueArea.innerHTML = '';
-                return;
-            }
-
-            // layout toggle
-            if (isMod && raw.toLowerCase() === '!layout') {
-                container.classList.toggle('horizontal-layout');
-                localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
-                return;
-            }
-
-            const emoteHtml = formatEmotes(raw, msgObj.emotes || []);
+            const emoteHtml = formatEmotes(msgObj.message.trim(), msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
 
             const div = document.createElement('div');
@@ -152,8 +154,9 @@
             chatArea.appendChild(div);
             chatArea.scrollTop = chatArea.scrollHeight;
 
+            // --- PRIORITY 3: QUEUE FILTERING ---
             const trigger = settings.queueCmd.toLowerCase();
-            if (raw.toLowerCase().startsWith(trigger + ' ')) {
+            if (raw.startsWith(trigger + ' ')) {
                 const queueContent = emoteHtml.substring(trigger.length).trim();
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';

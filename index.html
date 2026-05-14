@@ -78,19 +78,18 @@
         const area2 = document.getElementById('area-2');
         const area3 = document.getElementById('area-3');
 
-        const settings = {
+        // Initial Settings Load
+        let settings = {
             theme: localStorage.getItem('theme') || 'dark',
             layout: localStorage.getItem('layout') || 'vertical',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
             showTime: localStorage.getItem('showTime') !== 'false'
         };
 
-        // Initialize state
+        // Apply saved states on boot
         if (settings.theme === 'light') body.classList.add('light-theme');
         if (settings.layout === 'horizontal') container.classList.add('horizontal-layout');
         if (!settings.showTime) body.classList.add('hide-chat-time');
-
-        let currentOrder = 0;
 
         const client = new StreamerbotClient({
             onConnect: () => {
@@ -120,6 +119,7 @@
 
             const rawText = msgObj.message.toString();
             const lowerText = rawText.toLowerCase().trim();
+            const args = lowerText.split(' ');
             
             const isBroadcaster = msgObj.isBroadcaster || msgObj.role === 4 || msgObj.username?.toLowerCase() === 'orrinn';
             const isMod = msgObj.isModerator || msgObj.role >= 3 || isBroadcaster;
@@ -130,9 +130,11 @@
             if (isMod) {
                 if (lowerText.startsWith("!qclear")) {
                     area3.innerHTML = "";
+                    return;
                 } else if (lowerText.startsWith("!time")) {
                     const isHidden = body.classList.toggle('hide-chat-time');
-                    localStorage.setItem('showTime', !isHidden);
+                    settings.showTime = !isHidden;
+                    localStorage.setItem('showTime', settings.showTime);
                     return; 
                 } else if (lowerText.startsWith("!settheme")) {
                     if (lowerText.includes("light")) {
@@ -143,43 +145,58 @@
                         localStorage.setItem('theme', 'dark');
                     }
                     return;
+                } else if (lowerText.startsWith("!setcommand")) {
+                    const newTrigger = args[1];
+                    if (newTrigger && newTrigger.startsWith('!')) {
+                        settings.queueCmd = newTrigger;
+                        localStorage.setItem('queueCmd', newTrigger);
+                    }
+                    return;
                 } else if (lowerText.startsWith("!layout")) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
                 } else if (lowerText.startsWith("!reorder")) {
-                    const panes = [document.getElementById('pane-1'), document.getElementById('pane-2'), document.getElementById('pane-3')];
-                    currentOrder = (currentOrder + 1) % 3;
-                    if (currentOrder === 0) {
-                        panes[0].style.order = "1"; panes[1].style.order = "2"; panes[2].style.order = "3";
-                    } else if (currentOrder === 1) {
-                        panes[1].style.order = "1"; panes[0].style.order = "2"; panes[2].style.order = "3";
-                    } else {
-                        panes[0].style.order = "1"; panes[2].style.order = "2"; panes[1].style.order = "3";
+                    const p1 = document.getElementById('pane-1');
+                    const p2 = document.getElementById('pane-2');
+                    const p3 = document.getElementById('pane-3');
+                    
+                    // Specific mapping: !reorder 3 1 2 -> p3=1st, p1=2nd, p2=3rd
+                    if (args.length >= 4) {
+                        const orderMap = { "1": p1, "2": p2, "3": p3 };
+                        if (orderMap[args[1]]) orderMap[args[1]].style.order = "1";
+                        if (orderMap[args[2]]) orderMap[args[2]].style.order = "2";
+                        if (orderMap[args[3]]) orderMap[args[3]].style.order = "3";
                     }
                     return;
                 }
             }
 
+            // --- UI RENDERING ---
             const emoteHtml = formatEmotes(rawText, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
             const userColor = msgObj.color || '#bb86fc';
             const baseContent = `<span class="timestamp">${timeStr}</span>${badgeHtml}<span class="user-name" style="color:${userColor}">${msgObj.displayName}:</span> `;
 
+            // Standard Chat
             const chatDiv = document.createElement('div');
             chatDiv.className = 'chat-msg';
             chatDiv.innerHTML = baseContent + emoteHtml;
             area1.appendChild(chatDiv);
             area1.scrollTop = area1.scrollHeight;
 
+            // Filtered Queue Check
             const trigger = settings.queueCmd.toLowerCase();
-            if (lowerText.startsWith(trigger + ' ')) {
+            if (lowerText.startsWith(trigger)) {
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "10px";
-                const displayMsg = emoteHtml.substring(rawText.indexOf(' ') + 1).trim();
-                qDiv.innerHTML = baseContent + displayMsg;
+                
+                // Strip the trigger word from display
+                const displayMsg = emoteHtml.replace(new RegExp('^' + trigger, 'i'), '').trim();
+                
+                qDiv.innerHTML = baseContent + (displayMsg || "<em>[Empty Message]</em>");
                 area3.appendChild(qDiv);
                 area3.scrollTop = area3.scrollHeight;
             }

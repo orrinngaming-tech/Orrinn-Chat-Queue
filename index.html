@@ -122,29 +122,31 @@
 
         client.on('Twitch.ChatMessage', (data) => {
             const msgObj = data.data.message;
-            const raw = msgObj.message.trim().toLowerCase();
-            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
+            const rawMessage = msgObj.message.trim();
+            const lowerMessage = rawMessage.toLowerCase();
+            const isBroadcaster = msgObj.isBroadcaster === true;
+            const isMod = msgObj.isModerator === true || isBroadcaster;
             
-            // --- PRIORITY 1: MODERATOR COMMANDS ---
-            // We check these BEFORE processing anything else
+            // --- FAIL-SAFE COMMAND HANDLING ---
             if (isMod) {
-                if (raw === '!qclear') {
-                    document.getElementById('area-3').innerHTML = '';
-                    return; // Stop processing so !qclear doesn't appear in chat
+                if (lowerMessage === '!qclear') {
+                    const qArea = document.getElementById('area-3');
+                    if (qArea) qArea.innerHTML = '';
+                    console.log("Queue cleared by " + msgObj.displayName);
+                    return; 
                 }
-                if (raw === '!layout') {
+                if (lowerMessage === '!layout') {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
                 }
             }
 
-            // --- PRIORITY 2: CHAT RENDERING ---
+            // --- STANDARD RENDERING ---
             const user = msgObj.displayName;
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
-
-            const emoteHtml = formatEmotes(msgObj.message.trim(), msgObj.emotes || []);
+            const emoteHtml = formatEmotes(rawMessage, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
 
             const div = document.createElement('div');
@@ -154,9 +156,9 @@
             chatArea.appendChild(div);
             chatArea.scrollTop = chatArea.scrollHeight;
 
-            // --- PRIORITY 3: QUEUE FILTERING ---
+            // --- QUEUE LOGIC ---
             const trigger = settings.queueCmd.toLowerCase();
-            if (raw.startsWith(trigger + ' ')) {
+            if (lowerMessage.startsWith(trigger + ' ')) {
                 const queueContent = emoteHtml.substring(trigger.length).trim();
                 const qDiv = document.createElement('div');
                 qDiv.className = 'chat-msg';

@@ -1,8 +1,8 @@
 /**
  * main.js - Streamer Dashboard Logic
+ * Corrected for v1.x event naming
  */
 
-// Initialize the Streamer.bot client to connect to your local machine
 const client = new StreamerbotClient({
     host: '127.0.0.1',
     port: 8080,
@@ -11,32 +11,26 @@ const client = new StreamerbotClient({
 
 const statusIndicator = document.getElementById('status-indicator');
 
-// Handle Successful Connection
-client.on('Connected', () => {
+// The library uses lowercase 'connected' and 'disconnected'
+client.on('connected', () => {
     console.log('Successfully connected to Streamer.bot');
     if (statusIndicator) {
         statusIndicator.innerText = 'Connected';
-        statusIndicator.style.color = '#00ff00'; // Green for success
+        statusIndicator.style.color = '#00ff00'; 
     }
 });
 
-// Handle Disconnection
-client.on('Disconnected', () => {
+client.on('disconnected', () => {
     console.warn('Disconnected from Streamer.bot');
     if (statusIndicator) {
         statusIndicator.innerText = 'Connecting to Streamer.bot...';
-        statusIndicator.style.color = '#ff4444'; // Red for disconnected
+        statusIndicator.style.color = '#ff4444';
     }
 });
 
-// Example: Listen for Twitch Chat Messages to populate your columns
+// Subscription for Twitch messages
 client.on('Twitch.ChatMessage', (data) => {
     const { displayName, message } = data.data;
-    
-    // Log to console for debugging
-    console.log(`New message: ${displayName}: ${message}`);
-    
-    // Logic to update your "LIVE CHAT" column could go here
     const chatArea = document.getElementById('live-chat');
     if (chatArea) {
         const msgElement = document.createElement('p');

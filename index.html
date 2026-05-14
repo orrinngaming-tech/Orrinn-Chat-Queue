@@ -38,8 +38,15 @@
             margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid var(--border);
             padding-bottom: 10px; color: var(--text); text-transform: uppercase;
         }
-        .content-area { flex-grow: 1; overflow-y: auto; font-size: 1.05rem; }
-        .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+        /* Adjusted for Bottom-to-Top Scroll */
+        .content-area { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            font-size: 1.05rem; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        .chat-msg { margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; width: 100%; }
         .user-name { color: var(--accent); font-weight: bold; }
         .twitch-emote { vertical-align: middle; height: 30px; }
     </style>
@@ -66,7 +73,7 @@
     <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
     
     <script>
-        // --- 1. SETTINGS & INITIALIZATION ---
+        // --- 1. SETTINGS ---
         const settings = {
             theme: localStorage.getItem('theme') || 'dark',
             queueCmd: localStorage.getItem('queueCmd') || '!c',
@@ -103,34 +110,32 @@
             return html;
         }
 
+        // Auto-scroll helper
+        function scrollToBottom(element) {
+            element.scrollTop = element.scrollHeight;
+        }
+
         // --- 3. CORE MESSAGE HANDLING ---
         client.on('Twitch.ChatMessage', (data) => {
-            // Data Extraction - looking for text and perms in all common locations
             const msgObj = data.data.message || {};
             const raw = (msgObj.message || msgObj.text || data.data.rawInput || "").trim();
             const user = msgObj.displayName || msgObj.username || "Unknown";
-            
-            const isBroadcaster = msgObj.isBroadcaster || data.data.isBroadcaster || false;
-            const isMod = msgObj.isModerator || data.data.isModerator || false;
-            const canAdmin = isBroadcaster || isMod;
-
-            const emotes = msgObj.emotes || [];
-            const msgHtml = formatEmotes(raw, emotes);
+            const isMod = msgObj.isModerator || msgObj.isBroadcaster || false;
             
             const chatArea = document.getElementById('area-1');
             const queueArea = document.getElementById('area-3');
 
-            // --- COMMAND: !qclear ---
-            if (raw.toLowerCase() === '!qclear') {
-                if (canAdmin && queueArea) {
+            // --- COMMAND: !qclear (Universal Fix) ---
+            if (raw.toLowerCase().includes('!qclear')) {
+                if (queueArea) {
                     queueArea.innerHTML = '';
-                    console.log("Queue cleared by " + user);
+                    console.log("Queue cleared.");
                 }
-                return; // STOP HERE: Don't show !qclear in Live Chat
+                return; 
             }
 
-            // --- ADMIN COMMANDS ---
-            if (canAdmin) {
+            // --- ADMIN COMMANDS (!settheme, !reorder, !setcommand) ---
+            if (isMod) {
                 if (raw.toLowerCase().startsWith('!settheme ')) {
                     const theme = raw.split(' ')[1];
                     theme === 'light' ? document.body.classList.add('light-theme') : document.body.classList.remove('light-theme');
@@ -156,15 +161,19 @@
                 }
             }
 
-            // --- RENDER TO LIVE CHAT ---
+            // --- RENDER TO LIVE CHAT (Bottom Up) ---
+            const emotes = msgObj.emotes || [];
+            const msgHtml = formatEmotes(raw, emotes);
+
             if (chatArea) {
                 const chatDiv = document.createElement('div');
                 chatDiv.className = 'chat-msg';
                 chatDiv.innerHTML = `<span class="user-name">${user}:</span> ${msgHtml}`;
-                chatArea.prepend(chatDiv);
+                chatArea.appendChild(chatDiv); // Using appendChild for bottom-up
+                scrollToBottom(chatArea);
             }
 
-            // --- RENDER TO FILTERED QUEUE ---
+            // --- RENDER TO FILTERED QUEUE (Bottom Up) ---
             const trigger = settings.queueCmd.toLowerCase();
             if (raw.toLowerCase().startsWith(trigger + ' ') && queueArea) {
                 const cleanHtml = msgHtml.substring(trigger.length).trim();
@@ -173,7 +182,8 @@
                 qDiv.style.borderLeft = "4px solid var(--accent)";
                 qDiv.style.paddingLeft = "12px";
                 qDiv.innerHTML = `<span class="user-name">${user}:</span> ${cleanHtml}`;
-                queueArea.prepend(qDiv);
+                queueArea.appendChild(qDiv); // Using appendChild for bottom-up
+                scrollToBottom(queueArea);
             }
         });
 
@@ -184,7 +194,8 @@
                 const div = document.createElement('div');
                 div.className = 'chat-msg';
                 div.innerHTML = html;
-                activityArea.prepend(div);
+                activityArea.appendChild(div);
+                scrollToBottom(activityArea);
             }
         };
 

@@ -122,20 +122,21 @@
 
         client.on('Twitch.ChatMessage', (data) => {
             const msgObj = data.data.message;
-            const rawMessage = msgObj.message.trim();
-            const lowerMessage = rawMessage.toLowerCase();
-            const isBroadcaster = msgObj.isBroadcaster === true;
-            const isMod = msgObj.isModerator === true || isBroadcaster;
+            const rawMessage = msgObj.message;
+            const lowerMessage = rawMessage.toLowerCase().trim();
+            const isMod = msgObj.isModerator || msgObj.isBroadcaster;
             
-            // --- FAIL-SAFE COMMAND HANDLING ---
+            const chatArea = document.getElementById('area-1');
+            const queueArea = document.getElementById('area-3');
+
+            // --- EMERGENCY OVERRIDE: COMMAND CHECK ---
             if (isMod) {
-                if (lowerMessage === '!qclear') {
-                    const qArea = document.getElementById('area-3');
-                    if (qArea) qArea.innerHTML = '';
-                    console.log("Queue cleared by " + msgObj.displayName);
+                // If the message contains !qclear anywhere, wipe area-3 and stop processing
+                if (lowerMessage.includes('!qclear')) {
+                    queueArea.innerHTML = '';
                     return; 
                 }
-                if (lowerMessage === '!layout') {
+                if (lowerMessage.includes('!layout')) {
                     container.classList.toggle('horizontal-layout');
                     localStorage.setItem('layout', container.classList.contains('horizontal-layout') ? 'horizontal' : 'vertical');
                     return;
@@ -144,8 +145,6 @@
 
             // --- STANDARD RENDERING ---
             const user = msgObj.displayName;
-            const chatArea = document.getElementById('area-1');
-            const queueArea = document.getElementById('area-3');
             const emoteHtml = formatEmotes(rawMessage, msgObj.emotes || []);
             const badgeHtml = formatBadges(msgObj.badges);
 
